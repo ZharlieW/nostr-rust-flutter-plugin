@@ -6,6 +6,7 @@ use nostr::types::time::Timestamp;
 use nostr::secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use hex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NostrEvent {
@@ -94,18 +95,18 @@ pub fn nip44_decrypt(ciphertext: String, public_key: String, private_key: String
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn sign_event(event_json: String, private_key: String) -> Result<NostrEvent, String> {
+pub fn sign_event(event_json: String, private_key: String) -> Result<String, String> {
     let private_key = SecretKey::from_str(&private_key)
         .map_err(|e| format!("Invalid private key: {}", e))?;
     
     let keys = Keys::new(private_key);
     
     // Parse the event from JSON
-    let event_data: serde_json::Value = serde_json::from_str(&event_json)
+    let mut event_data: serde_json::Value = serde_json::from_str(&event_json)
         .map_err(|e| format!("Invalid JSON: {}", e))?;
     
     // Extract fields
-    let _pubkey = event_data["pubkey"].as_str()
+    let pubkey = event_data["pubkey"].as_str()
         .ok_or("Missing pubkey field")?;
     let created_at = event_data["created_at"].as_u64()
         .ok_or("Missing or invalid created_at field")?;
@@ -139,7 +140,7 @@ pub fn sign_event(event_json: String, private_key: String) -> Result<NostrEvent,
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Invalid tags: {}", e))?;
     
-    // Create the event
+    // Create and sign the event using EventBuilder
     let event = EventBuilder::new(
         Kind::from(kind),
         content,
@@ -147,20 +148,13 @@ pub fn sign_event(event_json: String, private_key: String) -> Result<NostrEvent,
     )
     .custom_created_at(Timestamp::from(created_at))
     .to_event(&keys)
-    .map_err(|e| format!("Failed to create event: {}", e))?;
+    .map_err(|e| format!("Failed to create and sign event: {}", e))?;
     
-    // Convert to our struct
-    Ok(NostrEvent {
-        id: event.id.to_hex(),
-        pubkey: event.pubkey.to_hex(),
-        created_at: event.created_at.as_u64(),
-        kind: event.kind.as_u64(),
-        tags: event.tags.clone().into_iter().map(|tag| {
-            tag.as_vec().into_iter().map(|v| v.to_string()).collect()
-        }).collect(),
-        content: event.content.clone(),
-        sig: event.sig.to_string(),
-    })
+    // Convert back to JSON string
+    let signed_event_json = serde_json::to_string(&event)
+        .map_err(|e| format!("Failed to serialize signed event: {}", e))?;
+    
+    Ok(signed_event_json)
 }
 
 #[flutter_rust_bridge::frb(sync)]

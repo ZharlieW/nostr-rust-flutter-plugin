@@ -105,7 +105,7 @@ abstract class RustLibApi extends BaseApi {
     required String privateKey,
   });
 
-  NostrEvent crateApiNostrSignEvent({
+  String crateApiNostrSignEvent({
     required String eventJson,
     required String privateKey,
   });
@@ -318,7 +318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  NostrEvent crateApiNostrSignEvent({
+  String crateApiNostrSignEvent({
     required String eventJson,
     required String privateKey,
   }) {
@@ -331,7 +331,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_nostr_event,
+          decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiNostrSignEventConstMeta,

@@ -50,7 +50,7 @@ String nip44Decrypt({
   privateKey: privateKey,
 );
 
-NostrEvent signEvent({required String eventJson, required String privateKey}) =>
+String signEvent({required String eventJson, required String privateKey}) =>
     RustLib.instance.api.crateApiNostrSignEvent(
       eventJson: eventJson,
       privateKey: privateKey,
