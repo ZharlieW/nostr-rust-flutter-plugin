@@ -10,6 +10,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 NostrKeys generateKeys() => RustLib.instance.api.crateApiNostrGenerateKeys();
 
+String getPublicKeyFromPrivate({required String privateKey}) => RustLib
+    .instance
+    .api
+    .crateApiNostrGetPublicKeyFromPrivate(privateKey: privateKey);
+
 String nip04Encrypt({
   required String plaintext,
   required String publicKey,

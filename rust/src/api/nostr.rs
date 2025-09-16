@@ -35,6 +35,15 @@ pub fn generate_keys() -> Result<NostrKeys, String> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_public_key_from_private(private_key: String) -> Result<String, String> {
+    let private_key = SecretKey::from_str(&private_key)
+        .map_err(|e| format!("Invalid private key: {}", e))?;
+    
+    let keys = Keys::new(private_key);
+    Ok(keys.public_key().to_hex())
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn nip04_encrypt(plaintext: String, public_key: String, private_key: String) -> Result<String, String> {
     let public_key = PublicKey::from_str(&public_key)
         .map_err(|e| format!("Invalid public key: {}", e))?;
