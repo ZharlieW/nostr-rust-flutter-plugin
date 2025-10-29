@@ -9,7 +9,15 @@ set(PROJECT_NAME "rust_lib_nostr_rust")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 include("../cargokit/cmake/cargokit.cmake")
-apply_cargokit(${PROJECT_NAME} ../../../../../../rust rust_lib_nostr_rust "")
+
+# Use absolute path on Windows to avoid symlink resolution issues
+# Other platforms can use relative paths normally
+if(WIN32)
+    get_filename_component(MANIFEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../rust" ABSOLUTE)
+    apply_cargokit(${PROJECT_NAME} "${MANIFEST_DIR}" rust_lib_nostr_rust "")
+else()
+    apply_cargokit(${PROJECT_NAME} ../../../../../../rust rust_lib_nostr_rust "")
+endif()
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an

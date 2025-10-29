@@ -59,6 +59,11 @@ class Environment {
 
   static String _getEnvPath(String key) {
     final res = _getEnv(key);
+    // On Windows, if the path is already absolute (contains : like C:),
+    // don't try to resolve symlinks as it can cause path concatenation issues
+    if (Platform.isWindows && res.contains(':')) {
+      return res;
+    }
     if (Directory(res).existsSync()) {
       return res.resolveSymlink();
     } else {
