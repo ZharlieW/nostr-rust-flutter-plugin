@@ -3,6 +3,10 @@ name = "rust_lib_nostr_rust"
 version = "0.1.0"
 edition = "2021"
 
+# Declare this as a workspace root to prevent parent workspace detection issues on Windows
+# This allows the package to be built independently while still being a workspace member on other platforms
+[workspace]
+
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
