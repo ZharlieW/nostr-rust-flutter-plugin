@@ -1,5 +1,5 @@
 use nostr_relay_builder::{LocalRelay, RelayBuilder};
-use nostr_lmdb::NostrLMDB;
+use nostr_ndb::NdbDatabase;
 use std::sync::{Arc, Mutex};
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -62,18 +62,21 @@ async fn start_relay_async(host: String, port: u16, db_path: String) -> Result<S
     let addr: IpAddr = host.parse()
         .map_err(|e| format!("Invalid IP address '{}': {}", host, e))?;
     
-    // Create LMDB database (persistent, cross-platform)
-    let db_path_buf = PathBuf::from(db_path);
+    // Create NDB database (nostrdb, persistent, cross-platform)
+    // NDB uses a string path instead of PathBuf
+    let db_path_str = db_path.clone();
     
     // Create parent directory if it doesn't exist
+    let db_path_buf = PathBuf::from(&db_path);
     if let Some(parent) = db_path_buf.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create database directory: {}", e))?;
     }
     
-    // Create LMDB database (sync operation)
-    let database = NostrLMDB::open(&db_path_buf)
-        .map_err(|e| format!("Failed to open LMDB database: {}", e))?;
+    // Create NDB database (sync operation)
+    // NdbDatabase::open expects a string path
+    let database = NdbDatabase::open(&db_path_str)
+        .map_err(|e| format!("Failed to open NDB database: {}", e))?;
     
     // Build relay
     let builder = RelayBuilder::default()
