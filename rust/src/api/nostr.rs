@@ -6,7 +6,6 @@ use nostr::types::time::Timestamp;
 use nostr::secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use hex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NostrEvent {
@@ -30,7 +29,7 @@ pub fn generate_keys() -> Result<NostrKeys, String> {
     let keys = Keys::generate();
     Ok(NostrKeys {
         public_key: keys.public_key().to_hex(),
-        private_key: keys.secret_key().map_err(|e| format!("Failed to get secret key: {}", e))?.to_secret_hex(),
+        private_key: keys.secret_key().to_secret_hex(),
     })
 }
 
@@ -51,7 +50,7 @@ pub fn nip04_encrypt(plaintext: String, public_key: String, private_key: String)
         .map_err(|e| format!("Invalid private key: {}", e))?;
     
     let keys = Keys::new(private_key);
-    let secret_key = keys.secret_key().map_err(|e| format!("Failed to get secret key: {}", e))?;
+    let secret_key = keys.secret_key();
     let encrypted = nip04::encrypt(secret_key, &public_key, plaintext)
         .map_err(|e| format!("Encryption failed: {}", e))?;
     
@@ -66,7 +65,7 @@ pub fn nip04_decrypt(ciphertext: String, public_key: String, private_key: String
         .map_err(|e| format!("Invalid private key: {}", e))?;
     
     let keys = Keys::new(private_key);
-    let secret_key = keys.secret_key().map_err(|e| format!("Failed to get secret key: {}", e))?;
+    let secret_key = keys.secret_key();
     let decrypted = nip04::decrypt(secret_key, &public_key, ciphertext)
         .map_err(|e| format!("Decryption failed: {}", e))?;
     
@@ -81,7 +80,7 @@ pub fn nip44_encrypt(plaintext: String, public_key: String, private_key: String)
         .map_err(|e| format!("Invalid private key: {}", e))?;
     
     let keys = Keys::new(private_key);
-    let secret_key = keys.secret_key().map_err(|e| format!("Failed to get secret key: {}", e))?;
+    let secret_key = keys.secret_key();
     let encrypted = nip44::encrypt(secret_key, &public_key, plaintext, nip44::Version::V2)
         .map_err(|e| format!("NIP-44 encryption failed: {}", e))?;
     
@@ -96,7 +95,7 @@ pub fn nip44_decrypt(ciphertext: String, public_key: String, private_key: String
         .map_err(|e| format!("Invalid private key: {}", e))?;
     
     let keys = Keys::new(private_key);
-    let secret_key = keys.secret_key().map_err(|e| format!("Failed to get secret key: {}", e))?;
+    let secret_key = keys.secret_key();
     let decrypted = nip44::decrypt(secret_key, &public_key, ciphertext)
         .map_err(|e| format!("NIP-44 decryption failed: {}", e))?;
     
@@ -111,7 +110,7 @@ pub fn sign_event(event_json: String, private_key: String) -> Result<String, Str
     let keys = Keys::new(private_key);
     
     // Parse the event from JSON
-    let mut event_data: serde_json::Value = serde_json::from_str(&event_json)
+    let event_data: serde_json::Value = serde_json::from_str(&event_json)
         .map_err(|e| format!("Invalid JSON: {}", e))?;
     
     // Extract fields
@@ -150,14 +149,11 @@ pub fn sign_event(event_json: String, private_key: String) -> Result<String, Str
         .map_err(|e| format!("Invalid tags: {}", e))?;
     
     // Create and sign the event using EventBuilder
-    let event = EventBuilder::new(
-        Kind::from(kind),
-        content,
-        nostr_tags
-    )
-    .custom_created_at(Timestamp::from(created_at))
-    .to_event(&keys)
-    .map_err(|e| format!("Failed to create and sign event: {}", e))?;
+    let event = EventBuilder::new(Kind::from(kind as u16), content)
+        .tags(nostr_tags)
+        .custom_created_at(Timestamp::from(created_at))
+        .sign_with_keys(&keys)
+        .map_err(|e| format!("Failed to create and sign event: {}", e))?;
     
     // Convert back to JSON string
     let signed_event_json = serde_json::to_string(&event)
@@ -185,14 +181,11 @@ pub fn verify_event(event: NostrEvent) -> Result<bool, String> {
         .map_err(|e| format!("Invalid tags: {}", e))?;
     
     // Create the event for verification using EventBuilder
-    let nostr_event = EventBuilder::new(
-        Kind::from(event.kind),
-        event.content,
-        tags
-    )
-    .custom_created_at(Timestamp::from(event.created_at))
-    .to_event(&Keys::new(SecretKey::from_str(&event.pubkey).unwrap()))
-    .unwrap();
+    let nostr_event = EventBuilder::new(Kind::from(event.kind as u16), event.content)
+        .tags(tags)
+        .custom_created_at(Timestamp::from(event.created_at))
+        .sign_with_keys(&Keys::new(SecretKey::from_str(&event.pubkey).unwrap()))
+        .unwrap();
     
     // Verify the signature
     Ok(nostr_event.verify().is_ok())
