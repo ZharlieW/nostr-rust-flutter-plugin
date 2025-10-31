@@ -5,7 +5,31 @@ get_filename_component(cargokit_cmake_root "${cargokit_cmake_root}" REALPATH)
 
 if(WIN32)
     # REALPATH does not properly resolve symlinks on windows :-/
-    execute_process(COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_LIST_DIR}/resolve_symlinks.ps1" "${cargokit_cmake_root}" OUTPUT_VARIABLE cargokit_cmake_root OUTPUT_STRIP_TRAILING_WHITESPACE)
+    file(TO_NATIVE_PATH "${CMAKE_CURRENT_LIST_DIR}/resolve_symlinks.ps1" RESOLVE_SYMLINKS_SCRIPT)
+    execute_process(
+        COMMAND powershell -ExecutionPolicy Bypass -File "${RESOLVE_SYMLINKS_SCRIPT}" "${cargokit_cmake_root}"
+        OUTPUT_VARIABLE resolved_path
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE resolve_result
+    )
+    
+    # Use resolved path if successful, otherwise fallback
+    if(resolve_result EQUAL "0" AND resolved_path)
+        file(TO_NATIVE_PATH "${resolved_path}" cargokit_cmake_root)
+    else()
+        # Fallback: calculate from CMAKE_SOURCE_DIR if available
+        if(DEFINED CMAKE_SOURCE_DIR)
+            file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/packages/nostr-rust-flutter-plugin/rust_builder/cargokit" fallback_path)
+            if(EXISTS "${fallback_path}")
+                set(cargokit_cmake_root "${fallback_path}")
+            else()
+                file(TO_NATIVE_PATH "${cargokit_cmake_root}" cargokit_cmake_root)
+            endif()
+        else()
+            file(TO_NATIVE_PATH "${cargokit_cmake_root}" cargokit_cmake_root)
+        endif()
+    endif()
 endif()
 
 # Arguments
@@ -34,30 +58,102 @@ function(apply_cargokit target manifest_dir lib_name any_symbol_name)
     endif()
 
     # Handle both absolute and relative paths for manifest_dir
+    # Fix symlink path resolution issues on Windows
     if(IS_ABSOLUTE "${manifest_dir}")
         set(RESOLVED_MANIFEST_DIR "${manifest_dir}")
+        # If absolute path doesn't exist, it might be from symlink - recalculate
+        if(NOT EXISTS "${RESOLVED_MANIFEST_DIR}" AND WIN32 AND DEFINED cargokit_cmake_root)
+            get_filename_component(PLUGIN_ROOT "${cargokit_cmake_root}" DIRECTORY)
+            get_filename_component(PLUGIN_ROOT "${PLUGIN_ROOT}" DIRECTORY)
+            file(TO_NATIVE_PATH "${PLUGIN_ROOT}/rust" RESOLVED_MANIFEST_DIR)
+        endif()
     else()
         set(RESOLVED_MANIFEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${manifest_dir}")
+        # If path doesn't exist, try from project root
+        if(NOT EXISTS "${RESOLVED_MANIFEST_DIR}" AND DEFINED CMAKE_SOURCE_DIR)
+            file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/packages/nostr-rust-flutter-plugin/rust" alt_path)
+            if(EXISTS "${alt_path}")
+                set(RESOLVED_MANIFEST_DIR "${alt_path}")
+            endif()
+        endif()
+        # Last resort: calculate from cargokit location
+        if(NOT EXISTS "${RESOLVED_MANIFEST_DIR}" AND WIN32 AND DEFINED cargokit_cmake_root)
+            get_filename_component(PLUGIN_ROOT "${cargokit_cmake_root}" DIRECTORY)
+            get_filename_component(PLUGIN_ROOT "${PLUGIN_ROOT}" DIRECTORY)
+            file(TO_NATIVE_PATH "${PLUGIN_ROOT}/rust" RESOLVED_MANIFEST_DIR)
+        endif()
+    endif()
+
+    # Get FLUTTER_ROOT - critical for Windows builds
+    # Other platforms can usually find Flutter via PATH or environment
+    if(NOT DEFINED FLUTTER_ROOT)
+        if(DEFINED ENV{FLUTTER_ROOT})
+            set(FLUTTER_ROOT "$ENV{FLUTTER_ROOT}")
+        else()
+            # Try to find flutter command in PATH (works on all platforms)
+            find_program(FLUTTER_CMD flutter)
+            if(FLUTTER_CMD)
+                get_filename_component(FLUTTER_CMD "${FLUTTER_CMD}" ABSOLUTE)
+                get_filename_component(FLUTTER_ROOT "${FLUTTER_CMD}" DIRECTORY)
+                get_filename_component(FLUTTER_ROOT "${FLUTTER_ROOT}" DIRECTORY)
+            elseif(WIN32)
+                # Windows-specific fallback paths (only on Windows)
+                find_program(FLUTTER_CMD flutter 
+                    PATHS 
+                        "C:/flutter/bin"
+                        "$ENV{USERPROFILE}/flutter/bin"
+                        "$ENV{LOCALAPPDATA}/flutter/bin"
+                    NO_DEFAULT_PATH
+                )
+                if(FLUTTER_CMD)
+                    get_filename_component(FLUTTER_ROOT "${FLUTTER_CMD}" DIRECTORY)
+                    get_filename_component(FLUTTER_ROOT "${FLUTTER_ROOT}" DIRECTORY)
+                endif()
+            endif()
+        endif()
+    endif()
+
+    # Convert all paths to native format on Windows to handle spaces correctly
+    if(WIN32)
+        file(TO_NATIVE_PATH "${RESOLVED_MANIFEST_DIR}" NATIVE_MANIFEST_DIR)
+        file(TO_NATIVE_PATH "${CARGOKIT_TEMP_DIR}" NATIVE_TEMP_DIR)
+        file(TO_NATIVE_PATH "${CARGOKIT_OUTPUT_DIR}" NATIVE_OUTPUT_DIR)
+        file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}" NATIVE_SOURCE_DIR)
+        file(TO_NATIVE_PATH "${FLUTTER_ROOT}" NATIVE_FLUTTER_ROOT)
+        file(TO_NATIVE_PATH "${CMAKE_COMMAND}" NATIVE_CMAKE_CMD)
+        file(TO_NATIVE_PATH "${CARGOKIT_TEMP_DIR}/tool" NATIVE_TOOL_TEMP_DIR)
+    else()
+        set(NATIVE_MANIFEST_DIR "${RESOLVED_MANIFEST_DIR}")
+        set(NATIVE_TEMP_DIR "${CARGOKIT_TEMP_DIR}")
+        set(NATIVE_OUTPUT_DIR "${CARGOKIT_OUTPUT_DIR}")
+        set(NATIVE_SOURCE_DIR "${CMAKE_SOURCE_DIR}")
+        set(NATIVE_FLUTTER_ROOT "${FLUTTER_ROOT}")
+        set(NATIVE_CMAKE_CMD "${CMAKE_COMMAND}")
+        set(NATIVE_TOOL_TEMP_DIR "${CARGOKIT_TEMP_DIR}/tool")
     endif()
 
     set(CARGOKIT_ENV
-        "CARGOKIT_CMAKE=${CMAKE_COMMAND}"
+        "CARGOKIT_CMAKE=${NATIVE_CMAKE_CMD}"
         "CARGOKIT_CONFIGURATION=$<CONFIG>"
-        "CARGOKIT_MANIFEST_DIR=${RESOLVED_MANIFEST_DIR}"
-        "CARGOKIT_TARGET_TEMP_DIR=${CARGOKIT_TEMP_DIR}"
-        "CARGOKIT_OUTPUT_DIR=${CARGOKIT_OUTPUT_DIR}"
+        "CARGOKIT_MANIFEST_DIR=${NATIVE_MANIFEST_DIR}"
+        "CARGOKIT_TARGET_TEMP_DIR=${NATIVE_TEMP_DIR}"
+        "CARGOKIT_OUTPUT_DIR=${NATIVE_OUTPUT_DIR}"
         "CARGOKIT_TARGET_PLATFORM=${CARGOKIT_TARGET_PLATFORM}"
-        "CARGOKIT_TOOL_TEMP_DIR=${CARGOKIT_TEMP_DIR}/tool"
-        "CARGOKIT_ROOT_PROJECT_DIR=${CMAKE_SOURCE_DIR}"
+        "CARGOKIT_TOOL_TEMP_DIR=${NATIVE_TOOL_TEMP_DIR}"
+        "CARGOKIT_ROOT_PROJECT_DIR=${NATIVE_SOURCE_DIR}"
+        "FLUTTER_ROOT=${NATIVE_FLUTTER_ROOT}"
     )
 
     if (WIN32)
         set(SCRIPT_EXTENSION ".cmd")
         set(IMPORT_LIB_EXTENSION ".lib")
+        # Convert script path to native format for Windows
+        file(TO_NATIVE_PATH "${cargokit_cmake_root}/run_build_tool${SCRIPT_EXTENSION}" RUN_BUILD_TOOL_SCRIPT)
     else()
         set(SCRIPT_EXTENSION ".sh")
         set(IMPORT_LIB_EXTENSION "")
         execute_process(COMMAND chmod +x "${cargokit_cmake_root}/run_build_tool${SCRIPT_EXTENSION}")
+        set(RUN_BUILD_TOOL_SCRIPT "${cargokit_cmake_root}/run_build_tool${SCRIPT_EXTENSION}")
     endif()
 
     # Using generators in custom command is only supported in CMake 3.20+
@@ -68,7 +164,8 @@ function(apply_cargokit target manifest_dir lib_name any_symbol_name)
                 "${CMAKE_CURRENT_BINARY_DIR}/${CONFIG}/${CARGOKIT_LIB_FULL_NAME}"
                 "${CMAKE_CURRENT_BINARY_DIR}/_phony_"
                 COMMAND ${CMAKE_COMMAND} -E env ${CARGOKIT_ENV}
-                "${cargokit_cmake_root}/run_build_tool${SCRIPT_EXTENSION}" build-cmake
+                    "${RUN_BUILD_TOOL_SCRIPT}"
+                    build-cmake
                 VERBATIM
             )
         endforeach()
@@ -78,7 +175,8 @@ function(apply_cargokit target manifest_dir lib_name any_symbol_name)
             ${OUTPUT_LIB}
             "${CMAKE_CURRENT_BINARY_DIR}/_phony_"
             COMMAND ${CMAKE_COMMAND} -E env ${CARGOKIT_ENV}
-            "${cargokit_cmake_root}/run_build_tool${SCRIPT_EXTENSION}" build-cmake
+                "${RUN_BUILD_TOOL_SCRIPT}"
+                build-cmake
             VERBATIM
         )
     endif()
