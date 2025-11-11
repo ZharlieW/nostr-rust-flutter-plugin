@@ -22,6 +22,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
+  Map<BigInt, BigInt> dco_decode_Map_u_64_u_64(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -40,13 +43,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(BigInt, BigInt)> dco_decode_list_record_u_64_u_64(dynamic raw);
+
+  @protected
   NostrEvent dco_decode_nostr_event(dynamic raw);
 
   @protected
   NostrKeys dco_decode_nostr_keys(dynamic raw);
 
   @protected
+  (BigInt, BigInt) dco_decode_record_u_64_u_64(dynamic raw);
+
+  @protected
   RelayConfig dco_decode_relay_config(dynamic raw);
+
+  @protected
+  RelayStats dco_decode_relay_stats(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -59,6 +71,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  Map<BigInt, BigInt> sse_decode_Map_u_64_u_64(SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -79,13 +94,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(BigInt, BigInt)> sse_decode_list_record_u_64_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NostrEvent sse_decode_nostr_event(SseDeserializer deserializer);
 
   @protected
   NostrKeys sse_decode_nostr_keys(SseDeserializer deserializer);
 
   @protected
+  (BigInt, BigInt) sse_decode_record_u_64_u_64(SseDeserializer deserializer);
+
+  @protected
   RelayConfig sse_decode_relay_config(SseDeserializer deserializer);
+
+  @protected
+  RelayStats sse_decode_relay_stats(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -101,6 +127,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_Map_u_64_u_64(
+    Map<BigInt, BigInt> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -130,13 +162,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_64_u_64(
+    List<(BigInt, BigInt)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_nostr_event(NostrEvent self, SseSerializer serializer);
 
   @protected
   void sse_encode_nostr_keys(NostrKeys self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_u_64_u_64(
+    (BigInt, BigInt) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_relay_config(RelayConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_relay_stats(RelayStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_16(int self, SseSerializer serializer);

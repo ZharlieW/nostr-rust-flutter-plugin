@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `start_relay_async`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `get_relay_stats_sync`, `start_relay_async`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// Initialize and start the relay
 ///
@@ -35,6 +35,10 @@ Future<String> getRelayUrl() => RustLib.instance.api.crateApiRelayGetRelayUrl();
 Future<bool> isRelayRunning() =>
     RustLib.instance.api.crateApiRelayIsRelayRunning();
 
+/// Get relay statistics
+Future<RelayStats> getRelayStats({required String dbPath}) =>
+    RustLib.instance.api.crateApiRelayGetRelayStats(dbPath: dbPath);
+
 String relayStart({
   required String host,
   required int port,
@@ -50,6 +54,9 @@ void relayStop() => RustLib.instance.api.crateApiRelayRelayStop();
 String relayGetUrl() => RustLib.instance.api.crateApiRelayRelayGetUrl();
 
 bool relayIsRunning() => RustLib.instance.api.crateApiRelayRelayIsRunning();
+
+RelayStats relayGetStats({required String dbPath}) =>
+    RustLib.instance.api.crateApiRelayRelayGetStats(dbPath: dbPath);
 
 /// Relay configuration
 class RelayConfig {
@@ -71,4 +78,36 @@ class RelayConfig {
           runtimeType == other.runtimeType &&
           host == other.host &&
           port == other.port;
+}
+
+/// Relay statistics (event-focused)
+class RelayStats {
+  final BigInt totalEvents;
+  final Map<BigInt, BigInt> eventsByKind;
+  final BigInt eventsLast24H;
+  final BigInt eventsLast7D;
+
+  const RelayStats({
+    required this.totalEvents,
+    required this.eventsByKind,
+    required this.eventsLast24H,
+    required this.eventsLast7D,
+  });
+
+  @override
+  int get hashCode =>
+      totalEvents.hashCode ^
+      eventsByKind.hashCode ^
+      eventsLast24H.hashCode ^
+      eventsLast7D.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RelayStats &&
+          runtimeType == other.runtimeType &&
+          totalEvents == other.totalEvents &&
+          eventsByKind == other.eventsByKind &&
+          eventsLast24H == other.eventsLast24H &&
+          eventsLast7D == other.eventsLast7D;
 }
