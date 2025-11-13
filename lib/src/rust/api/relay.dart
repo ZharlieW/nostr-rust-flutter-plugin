@@ -83,31 +83,16 @@ class RelayConfig {
 /// Relay statistics (event-focused)
 class RelayStats {
   final BigInt totalEvents;
-  final Map<BigInt, BigInt> eventsByKind;
-  final BigInt eventsLast24H;
-  final BigInt eventsLast7D;
 
-  const RelayStats({
-    required this.totalEvents,
-    required this.eventsByKind,
-    required this.eventsLast24H,
-    required this.eventsLast7D,
-  });
+  const RelayStats({required this.totalEvents});
 
   @override
-  int get hashCode =>
-      totalEvents.hashCode ^
-      eventsByKind.hashCode ^
-      eventsLast24H.hashCode ^
-      eventsLast7D.hashCode;
+  int get hashCode => totalEvents.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is RelayStats &&
           runtimeType == other.runtimeType &&
-          totalEvents == other.totalEvents &&
-          eventsByKind == other.eventsByKind &&
-          eventsLast24H == other.eventsLast24H &&
-          eventsLast7D == other.eventsLast7D;
+          totalEvents == other.totalEvents;
 }

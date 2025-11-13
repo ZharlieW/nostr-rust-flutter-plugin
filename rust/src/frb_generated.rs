@@ -722,14 +722,6 @@ fn wire__crate__api__nostr__verify_event_impl(
 
 // Section: dart2rust
 
-impl SseDecode for std::collections::HashMap<u64, u64> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u64, u64)>>::sse_decode(deserializer);
-        return inner.into_iter().collect();
-    }
-}
-
 impl SseDecode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -781,18 +773,6 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Vec<(u64, u64)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<(u64, u64)>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for crate::api::nostr::NostrEvent {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -827,15 +807,6 @@ impl SseDecode for crate::api::nostr::NostrKeys {
     }
 }
 
-impl SseDecode for (u64, u64) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <u64>::sse_decode(deserializer);
-        let mut var_field1 = <u64>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
 impl SseDecode for crate::api::relay::RelayConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -852,14 +823,8 @@ impl SseDecode for crate::api::relay::RelayStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_totalEvents = <u64>::sse_decode(deserializer);
-        let mut var_eventsByKind = <std::collections::HashMap<u64, u64>>::sse_decode(deserializer);
-        let mut var_eventsLast24H = <u64>::sse_decode(deserializer);
-        let mut var_eventsLast7D = <u64>::sse_decode(deserializer);
         return crate::api::relay::RelayStats {
             total_events: var_totalEvents,
-            events_by_kind: var_eventsByKind,
-            events_last_24h: var_eventsLast24H,
-            events_last_7d: var_eventsLast7D,
         };
     }
 }
@@ -1010,13 +975,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::relay::RelayConfig>
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::relay::RelayStats {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.total_events.into_into_dart().into_dart(),
-            self.events_by_kind.into_into_dart().into_dart(),
-            self.events_last_24h.into_into_dart().into_dart(),
-            self.events_last_7d.into_into_dart().into_dart(),
-        ]
-        .into_dart()
+        [self.total_events.into_into_dart().into_dart()].into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::relay::RelayStats {}
@@ -1025,13 +984,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::relay::RelayStats>
 {
     fn into_into_dart(self) -> crate::api::relay::RelayStats {
         self
-    }
-}
-
-impl SseEncode for std::collections::HashMap<u64, u64> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u64, u64)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
@@ -1079,16 +1031,6 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Vec<(u64, u64)> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <(u64, u64)>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for crate::api::nostr::NostrEvent {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1110,14 +1052,6 @@ impl SseEncode for crate::api::nostr::NostrKeys {
     }
 }
 
-impl SseEncode for (u64, u64) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u64>::sse_encode(self.0, serializer);
-        <u64>::sse_encode(self.1, serializer);
-    }
-}
-
 impl SseEncode for crate::api::relay::RelayConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1130,9 +1064,6 @@ impl SseEncode for crate::api::relay::RelayStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.total_events, serializer);
-        <std::collections::HashMap<u64, u64>>::sse_encode(self.events_by_kind, serializer);
-        <u64>::sse_encode(self.events_last_24h, serializer);
-        <u64>::sse_encode(self.events_last_7d, serializer);
     }
 }
 

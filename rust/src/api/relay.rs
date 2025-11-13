@@ -3,15 +3,15 @@ use nostr_ndb::NdbDatabase;
 use std::sync::{Arc, Mutex};
 use std::net::IpAddr;
 use std::path::PathBuf;
-use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use serde::{Serialize, Deserialize};
+use nostr_database::prelude::Filter;
+use nostr_database::NostrDatabase;
 
 // Global relay instance
 static RELAY_INSTANCE: Mutex<Option<Arc<LocalRelay>>> = Mutex::new(None);
 static RELAY_CLIENT_URL: Mutex<Option<String>> = Mutex::new(None);
 static RELAY_DATABASE: Mutex<Option<Arc<NdbDatabase>>> = Mutex::new(None);
-static RELAY_START_TIME: Mutex<Option<u64>> = Mutex::new(None);
 static RUNTIME: Mutex<Option<Arc<Runtime>>> = Mutex::new(None);
 
 /// Relay configuration
@@ -88,14 +88,6 @@ async fn start_relay_async(host: String, port: u16, db_path: String) -> Result<S
         let mut db_guard = RELAY_DATABASE.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
         *db_guard = Some(database_arc.clone());
-    }
-    
-    // Store start time (for potential future use)
-    {
-        use nostr::Timestamp;
-        let mut start_time_guard = RELAY_START_TIME.lock()
-            .map_err(|e| format!("Failed to lock start time: {}", e))?;
-        *start_time_guard = Some(Timestamp::now().as_u64());
     }
     
     // Build relay
@@ -183,9 +175,6 @@ pub fn is_relay_running() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayStats {
     pub total_events: u64,
-    pub events_by_kind: HashMap<u64, u64>,
-    pub events_last_24h: u64,
-    pub events_last_7d: u64,
 }
 
 /// Get relay statistics
@@ -211,19 +200,23 @@ pub fn get_relay_stats(db_path: String) -> Result<RelayStats, String> {
     Ok(stats)
 }
 
-fn get_relay_stats_sync(_database: Arc<NdbDatabase>) -> Result<RelayStats, String> {
-    // Note: NdbDatabase query requires a Transaction and is not async
-    // For now, return basic stats without querying events
-    // TODO: Implement proper querying with Transaction when needed
-    
-    // Return basic stats (event querying requires Transaction which is complex)
-    // This can be enhanced later when we have proper access to the database transaction API
-    Ok(RelayStats {
-        total_events: 0,
-        events_by_kind: HashMap::new(),
-        events_last_24h: 0,
-        events_last_7d: 0,
-    })
+fn get_relay_stats_sync(database: Arc<NdbDatabase>) -> Result<RelayStats, String> {
+    let runtime = {
+        let rt_guard = RUNTIME
+            .lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+        rt_guard
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| "Runtime not initialized".to_string())?
+    };
+
+    let db = database.clone();
+    let total_events = runtime
+        .block_on(async move { db.count(Filter::new()).await })
+        .map_err(|e| format!("Failed to count events: {}", e))? as u64;
+
+    Ok(RelayStats { total_events })
 }
 
 // FFI-compatible functions using flutter_rust_bridge

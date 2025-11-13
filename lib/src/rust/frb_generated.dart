@@ -721,14 +721,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "verify_event", argNames: ["event"]);
 
   @protected
-  Map<BigInt, BigInt> dco_decode_Map_u_64_u_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return Map.fromEntries(
-      dco_decode_list_record_u_64_u_64(raw).map((e) => MapEntry(e.$1, e.$2)),
-    );
-  }
-
-  @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
@@ -765,12 +757,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(BigInt, BigInt)> dco_decode_list_record_u_64_u_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_record_u_64_u_64).toList();
-  }
-
-  @protected
   NostrEvent dco_decode_nostr_event(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -800,16 +786,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (BigInt, BigInt) dco_decode_record_u_64_u_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2) {
-      throw Exception('Expected 2 elements, got ${arr.length}');
-    }
-    return (dco_decode_u_64(arr[0]), dco_decode_u_64(arr[1]));
-  }
-
-  @protected
   RelayConfig dco_decode_relay_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -825,14 +801,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RelayStats dco_decode_relay_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return RelayStats(
-      totalEvents: dco_decode_u_64(arr[0]),
-      eventsByKind: dco_decode_Map_u_64_u_64(arr[1]),
-      eventsLast24H: dco_decode_u_64(arr[2]),
-      eventsLast7D: dco_decode_u_64(arr[3]),
-    );
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return RelayStats(totalEvents: dco_decode_u_64(arr[0]));
   }
 
   @protected
@@ -857,13 +828,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void dco_decode_unit(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return;
-  }
-
-  @protected
-  Map<BigInt, BigInt> sse_decode_Map_u_64_u_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_record_u_64_u_64(deserializer);
-    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
   @protected
@@ -917,20 +881,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(BigInt, BigInt)> sse_decode_list_record_u_64_u_64(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <(BigInt, BigInt)>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_record_u_64_u_64(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
   NostrEvent sse_decode_nostr_event(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -960,14 +910,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (BigInt, BigInt) sse_decode_record_u_64_u_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_field0 = sse_decode_u_64(deserializer);
-    var var_field1 = sse_decode_u_64(deserializer);
-    return (var_field0, var_field1);
-  }
-
-  @protected
   RelayConfig sse_decode_relay_config(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_host = sse_decode_String(deserializer);
@@ -979,15 +921,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RelayStats sse_decode_relay_stats(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_totalEvents = sse_decode_u_64(deserializer);
-    var var_eventsByKind = sse_decode_Map_u_64_u_64(deserializer);
-    var var_eventsLast24H = sse_decode_u_64(deserializer);
-    var var_eventsLast7D = sse_decode_u_64(deserializer);
-    return RelayStats(
-      totalEvents: var_totalEvents,
-      eventsByKind: var_eventsByKind,
-      eventsLast24H: var_eventsLast24H,
-      eventsLast7D: var_eventsLast7D,
-    );
+    return RelayStats(totalEvents: var_totalEvents);
   }
 
   @protected
@@ -1017,18 +951,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
-  }
-
-  @protected
-  void sse_encode_Map_u_64_u_64(
-    Map<BigInt, BigInt> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_record_u_64_u_64(
-      self.entries.map((e) => (e.key, e.value)).toList(),
-      serializer,
-    );
   }
 
   @protected
@@ -1084,18 +1006,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_record_u_64_u_64(
-    List<(BigInt, BigInt)> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_record_u_64_u_64(item, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_nostr_event(NostrEvent self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
@@ -1115,16 +1025,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_record_u_64_u_64(
-    (BigInt, BigInt) self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_64(self.$1, serializer);
-    sse_encode_u_64(self.$2, serializer);
-  }
-
-  @protected
   void sse_encode_relay_config(RelayConfig self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.host, serializer);
@@ -1135,9 +1035,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_relay_stats(RelayStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.totalEvents, serializer);
-    sse_encode_Map_u_64_u_64(self.eventsByKind, serializer);
-    sse_encode_u_64(self.eventsLast24H, serializer);
-    sse_encode_u_64(self.eventsLast7D, serializer);
   }
 
   @protected
