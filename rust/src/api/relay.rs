@@ -177,8 +177,8 @@ pub fn start_relay(host: String, port: u16, db_path: String) -> Result<String, S
             // Check if this log should be recorded
             let level = *event.metadata().level();
             
-            // Only record INFO level and above (no DEBUG logs)
-            // DEBUG logs are filtered out completely
+            // Only record ERROR, WARN, and INFO levels (no DEBUG or TRACE logs)
+            // DEBUG and TRACE logs are filtered out completely
             let should_log = level <= tracing::Level::INFO;
             
             if !should_log {
