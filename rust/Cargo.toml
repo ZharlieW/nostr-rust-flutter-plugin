@@ -14,9 +14,9 @@ crate-type = ["cdylib", "staticlib"]
 flutter_rust_bridge = "=2.7.0"
 nostr = { version = "0.43", features = ["nip04", "nip44"] }
 nostr-sdk = "0.43"
-nostr-relay-builder = "0.43"
-nostr-database = { version = "0.43", features = ["flatbuf"] }
-nostr-ndb = "0.43"
+nostr-relay-builder = { git = "https://github.com/ZharlieW/nostr", package = "nostr-relay-builder" }
+nostr-database = { git = "https://github.com/ZharlieW/nostr", package = "nostr-database", features = ["flatbuf"] }
+nostr-ndb = { git = "https://github.com/ZharlieW/nostr", package = "nostr-ndb" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -24,4 +24,5 @@ hex = "0.4"
 base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+tracing-appender = "0.2"
 async-trait = "0.1"

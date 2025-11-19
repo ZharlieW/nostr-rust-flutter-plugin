@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `get_relay_stats_sync`, `start_relay_async`
+// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `get_relay_stats_sync`, `limit_log_file_lines`, `start_relay_async`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// Initialize and start the relay
@@ -57,6 +57,25 @@ bool relayIsRunning() => RustLib.instance.api.crateApiRelayRelayIsRunning();
 
 RelayStats relayGetStats({required String dbPath}) =>
     RustLib.instance.api.crateApiRelayRelayGetStats(dbPath: dbPath);
+
+/// Get log file path
+Future<String> getLogFilePath() =>
+    RustLib.instance.api.crateApiRelayGetLogFilePath();
+
+/// Read log file content (last N lines)
+/// Only reads from the single log file (no rotation)
+/// Automatically truncates file to 200 lines if it exceeds the limit
+Future<String> readLogFile({int? maxLines}) =>
+    RustLib.instance.api.crateApiRelayReadLogFile(maxLines: maxLines);
+
+String relayGetLogFilePath() =>
+    RustLib.instance.api.crateApiRelayRelayGetLogFilePath();
+
+String relayReadLogFile({int? maxLines}) =>
+    RustLib.instance.api.crateApiRelayRelayReadLogFile(maxLines: maxLines);
+
+void relayClearLogFile() =>
+    RustLib.instance.api.crateApiRelayRelayClearLogFile();
 
 /// Relay configuration
 class RelayConfig {
