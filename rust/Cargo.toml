@@ -18,6 +18,9 @@ nostr-relay-builder = { git = "https://github.com/ZharlieW/nostr", package = "no
 nostr-database = { git = "https://github.com/ZharlieW/nostr", package = "nostr-database", features = ["flatbuf"] }
 nostr-ndb = { git = "https://github.com/ZharlieW/nostr", package = "nostr-ndb" }
 tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.25"
+rustls = "0.23"
+rustls-pemfile = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 hex = "0.4"
