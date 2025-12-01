@@ -6,10 +6,10 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `get_relay_stats_sync`, `limit_log_file_lines`, `start_relay_async`
+// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `fatal_socket_error`, `get_relay_stats_sync`, `limit_log_file_lines`, `setup_log_file`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
-/// Initialize and start the relay
+/// Start the relay
 ///
 /// # Arguments
 /// * `host` - IP address to bind (e.g. "127.0.0.1" or "0.0.0.0")
@@ -25,8 +25,12 @@ Future<String> startRelay({
   dbPath: dbPath,
 );
 
-/// Stop the relay
+/// Stop the relay and clean up all global data
 Future<void> stopRelay() => RustLib.instance.api.crateApiRelayStopRelay();
+
+/// Restart the relay by stopping (cleaning up all global data) and then starting (reinitializing)
+Future<String> restartRelay() =>
+    RustLib.instance.api.crateApiRelayRestartRelay();
 
 /// Get relay URL (returns client-usable URL)
 Future<String> getRelayUrl() => RustLib.instance.api.crateApiRelayGetRelayUrl();
@@ -50,6 +54,8 @@ String relayStart({
 );
 
 void relayStop() => RustLib.instance.api.crateApiRelayRelayStop();
+
+String relayRestart() => RustLib.instance.api.crateApiRelayRelayRestart();
 
 String relayGetUrl() => RustLib.instance.api.crateApiRelayRelayGetUrl();
 

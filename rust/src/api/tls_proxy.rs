@@ -289,13 +289,25 @@ pub fn tls_proxy_start(
     let (runtime, thread_handle) = create_runtime_in_thread()?;
     
     // Start server in the runtime
+    // Use a channel to wait for the server to actually start before returning
+    let (tx, rx) = std::sync::mpsc::channel();
+    let tls_port_for_log = tls_port;
+    
     let handle = runtime.spawn(async move {
-        if let Err(e) = server.start().await {
-            tracing::error!("Failed to start TLS proxy server: {}", e);
-        } else {
-            // Keep the server running
-            // The server's listener loop will keep running
-            std::future::pending::<()>().await;
+        match server.start().await {
+            Ok(_) => {
+                tracing::info!("✅ TLS proxy server started on port {}", tls_port_for_log);
+                // Signal that server started successfully
+                let _ = tx.send(Ok(()));
+                // Keep the server running
+                // The server's listener loop will keep running
+                std::future::pending::<()>().await;
+            }
+            Err(e) => {
+                tracing::error!("Failed to start TLS proxy server: {}", e);
+                // Signal that server failed to start
+                let _ = tx.send(Err(e));
+            }
         }
     });
     
@@ -308,8 +320,13 @@ pub fn tls_proxy_start(
         thread_handle,
     });
     
-    tracing::info!("✅ TLS proxy server started on port {}", tls_port);
-    Ok(())
+    // Wait for server to actually start (or fail) before returning
+    // Use a timeout to avoid blocking forever
+    match rx.recv_timeout(std::time::Duration::from_secs(5)) {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("Timeout waiting for TLS proxy server to start".to_string()),
+    }
 }
 
 /// Stop TLS proxy server
@@ -320,6 +337,8 @@ pub fn tls_proxy_stop() -> Result<(), String> {
     
     if let Some(runtime) = runtime_guard.take() {
         runtime.handle.abort();
+        // Give a brief moment for the port to be released
+        std::thread::sleep(std::time::Duration::from_millis(100));
         // Note: We can't easily stop the background thread, but aborting the handle
         // will stop the server. The thread will continue running but that's acceptable.
         tracing::info!("🛑 TLS proxy server stopped");

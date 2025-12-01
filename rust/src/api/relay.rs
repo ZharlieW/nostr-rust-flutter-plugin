@@ -1,4 +1,4 @@
-use nostr_relay_builder::{LocalRelay, RelayBuilder};
+use nostr_relay_builder::{LocalRelay, RelayBuilder, Error as RelayError};
 use nostr_ndb::NdbDatabase;
 use std::sync::{Arc, Mutex};
 use std::net::IpAddr;
@@ -15,81 +15,13 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::FormatFields;
 use tracing_appender::non_blocking::WorkerGuard;
+use std::io;
 
-/// Limit log file to max_lines by keeping only the last N lines
-fn limit_log_file_lines(log_file_path: &PathBuf, max_lines: usize) -> Result<(), String> {
-    if !log_file_path.exists() {
-        return Ok(());
-    }
-    
-    // Read all lines
-    let content = std::fs::read_to_string(log_file_path)
-        .map_err(|e| format!("Failed to read log file: {}", e))?;
-    
-    let lines: Vec<&str> = content.lines().collect();
-    
-    // If file has more than max_lines, keep only the last max_lines
-    if lines.len() > max_lines {
-        let start = lines.len() - max_lines;
-        let truncated_content = lines[start..].join("\n");
-        
-        std::fs::write(log_file_path, truncated_content)
-            .map_err(|e| format!("Failed to write truncated log file: {}", e))?;
-    }
-    
-    Ok(())
-}
-
-/// Clear log file content
-fn clear_log_file() -> Result<(), String> {
-    let log_path_guard = LOG_FILE_PATH.lock()
-        .map_err(|e| format!("Failed to lock log file path: {}", e))?;
-    
-    let log_path = log_path_guard.as_ref()
-        .ok_or_else(|| "Log file path not set".to_string())?;
-    
-    let log_file_path = PathBuf::from(log_path);
-    
-    // Clear the log file by writing empty content
-    std::fs::write(&log_file_path, "")
-        .map_err(|e| format!("Failed to clear log file: {}", e))?;
-    
-    Ok(())
-}
-
-// Global relay instance
-static RELAY_INSTANCE: Mutex<Option<Arc<LocalRelay>>> = Mutex::new(None);
-static RELAY_CLIENT_URL: Mutex<Option<String>> = Mutex::new(None);
-static RELAY_DATABASE: Mutex<Option<Arc<NdbDatabase>>> = Mutex::new(None);
-static RUNTIME: Mutex<Option<Arc<Runtime>>> = Mutex::new(None);
-static LOG_FILE_PATH: Mutex<Option<String>> = Mutex::new(None);
-static LOG_GUARD: Mutex<Option<WorkerGuard>> = Mutex::new(None);
-
-/// Relay configuration
-#[derive(Debug, Clone)]
-pub struct RelayConfig {
-    pub host: String,
-    pub port: u16,
-}
-
-impl Default for RelayConfig {
-    fn default() -> Self {
-        Self {
-            host: "0.0.0.0".to_string(),
-            port: 8081,
-        }
-    }
-}
-
-/// Initialize and start the relay
-/// 
-/// # Arguments
-/// * `host` - IP address to bind (e.g. "127.0.0.1" or "0.0.0.0")
-/// * `port` - Port number (e.g. 8081)
-/// * `db_path` - Database path (reserved for future persistent storage)
-pub fn start_relay(host: String, port: u16, db_path: String) -> Result<String, String> {
+/// Setup log file and initialize tracing
+/// Returns the log file path string
+fn setup_log_file(db_path: &str) -> Result<String, String> {
     // Setup log file path (in same directory as database)
-    let db_path_buf = PathBuf::from(&db_path);
+    let db_path_buf = PathBuf::from(db_path);
     let log_dir = db_path_buf.parent()
         .ok_or_else(|| "Invalid database path".to_string())?;
     let log_file_path = log_dir.join("relay.log");
@@ -237,33 +169,106 @@ pub fn start_relay(host: String, port: u16, db_path: String) -> Result<String, S
         )
         .try_init();
     
-    // Get or create runtime
-    let runtime = {
-        let mut rt_guard = RUNTIME.lock().map_err(|e| format!("Failed to lock runtime: {}", e))?;
-        if rt_guard.is_none() {
-            let rt = Runtime::new().map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
-            *rt_guard = Some(Arc::new(rt));
-        }
-        rt_guard.as_ref().unwrap().clone()
-    };
-
-    // Start relay in the runtime
-    let url = runtime.block_on(async {
-        start_relay_async(host, port, db_path, log_file_path_str.clone()).await
-    })?;
-
-    Ok(url)
+    Ok(log_file_path_str)
 }
 
-async fn start_relay_async(host: String, port: u16, db_path: String, log_file_path: String) -> Result<String, String> {
-    // Parse IP address
-    let addr: IpAddr = host.parse()
-        .map_err(|e| format!("Invalid IP address '{}': {}", host, e))?;
+/// Limit log file to max_lines by keeping only the last N lines
+fn limit_log_file_lines(log_file_path: &PathBuf, max_lines: usize) -> Result<(), String> {
+    if !log_file_path.exists() {
+        return Ok(());
+    }
     
-    // Create NDB database (nostrdb, persistent, cross-platform)
-    // NDB uses a string path instead of PathBuf
-    let db_path_str = db_path.clone();
+    // Read all lines
+    let content = std::fs::read_to_string(log_file_path)
+        .map_err(|e| format!("Failed to read log file: {}", e))?;
     
+    let lines: Vec<&str> = content.lines().collect();
+    
+    // If file has more than max_lines, keep only the last max_lines
+    if lines.len() > max_lines {
+        let start = lines.len() - max_lines;
+        let truncated_content = lines[start..].join("\n");
+        
+        std::fs::write(log_file_path, truncated_content)
+            .map_err(|e| format!("Failed to write truncated log file: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+/// Clear log file content
+fn clear_log_file() -> Result<(), String> {
+    let log_path_guard = LOG_FILE_PATH.lock()
+        .map_err(|e| format!("Failed to lock log file path: {}", e))?;
+    
+    let log_path = log_path_guard.as_ref()
+        .ok_or_else(|| "Log file path not set".to_string())?;
+    
+    let log_file_path = PathBuf::from(log_path);
+    
+    // Clear the log file by writing empty content
+    std::fs::write(&log_file_path, "")
+        .map_err(|e| format!("Failed to clear log file: {}", e))?;
+
+    Ok(())
+}
+
+// Global relay instance
+static RELAY_INSTANCE: Mutex<Option<Arc<LocalRelay>>> = Mutex::new(None);
+static RELAY_CLIENT_URL: Mutex<Option<String>> = Mutex::new(None);
+static RELAY_DATABASE: Mutex<Option<Arc<NdbDatabase>>> = Mutex::new(None);
+static RUNTIME: Mutex<Option<Arc<Runtime>>> = Mutex::new(None);
+static LOG_FILE_PATH: Mutex<Option<String>> = Mutex::new(None);
+static LOG_GUARD: Mutex<Option<WorkerGuard>> = Mutex::new(None);
+static RELAY_CONFIG: Mutex<Option<(String, u16, String)>> = Mutex::new(None);
+
+/// Check if an IO error is a fatal socket error that requires reconnection
+fn fatal_socket_error(err: &io::Error) -> bool {
+    matches!(
+        err.kind(),
+        io::ErrorKind::NotConnected
+            | io::ErrorKind::BrokenPipe
+            | io::ErrorKind::ConnectionReset
+    )
+}
+
+/// Relay configuration
+#[derive(Debug, Clone)]
+pub struct RelayConfig {
+    pub host: String,
+    pub port: u16,
+}
+
+impl Default for RelayConfig {
+    fn default() -> Self {
+        Self {
+            host: "0.0.0.0".to_string(),
+            port: 8081,
+        }
+    }
+}
+
+/// Start the relay
+/// 
+/// # Arguments
+/// * `host` - IP address to bind (e.g. "127.0.0.1" or "0.0.0.0")
+/// * `port` - Port number (e.g. 8081)
+/// * `db_path` - Database path (reserved for future persistent storage)
+pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<String, String> {
+    // Setup log file and initialize tracing
+    let log_file_path_str = setup_log_file(&db_path)?;
+    
+    tracing::info!("🚀 Starting relay...");
+    
+    // Clear client URL
+    {
+        let mut url_guard = RELAY_CLIENT_URL.lock()
+            .map_err(|e| format!("Failed to lock client URL: {}", e))?;
+        *url_guard = None;
+    }
+    
+    // Create or reopen database
+    let database_arc = {
     // Create parent directory if it doesn't exist
     let db_path_buf = PathBuf::from(&db_path);
     if let Some(parent) = db_path_buf.parent() {
@@ -271,35 +276,48 @@ async fn start_relay_async(host: String, port: u16, db_path: String, log_file_pa
             .map_err(|e| format!("Failed to create database directory: {}", e))?;
     }
     
-    // Create NDB database (sync operation)
-    // NdbDatabase::open expects a string path
-    let database = NdbDatabase::open(&db_path_str)
-        .map_err(|e| format!("Failed to open NDB database: {}", e))?;
-    
-    // Store database reference for querying
-    let database_arc = Arc::new(database);
-    {
         let mut db_guard = RELAY_DATABASE.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
-        *db_guard = Some(database_arc.clone());
-    }
+        
+        tracing::info!("Opening database connection...");
+        
+        let db = NdbDatabase::open(&db_path)
+            .map_err(|e| format!("Failed to open NDB database: {}", e))?;
+        let db_arc = Arc::new(db);
+        *db_guard = Some(db_arc.clone());
+        db_arc
+    };
     
-    // Build relay
+    // Parse IP address
+    let addr: IpAddr = host.parse()
+        .map_err(|e| format!("Invalid IP address '{}': {}", host, e))?;
+    
+    // Build new relay with fresh database
     let builder = RelayBuilder::default()
         .addr(addr)
         .port(port)
         .database(database_arc);
     
-    // Create relay instance
+    // Create new relay instance
     let relay = LocalRelay::new(builder);
     
-    // Start relay
-    relay.run()
-        .await
-        .map_err(|e| format!("Failed to start relay: {}", e))?;
+    // Store relay instance first (before any await that might need Send)
+    let relay_arc = Arc::new(relay);
+    {
+        let mut relay_guard = RELAY_INSTANCE.lock()
+            .map_err(|e| format!("Failed to lock relay instance: {}", e))?;
+        *relay_guard = Some(relay_arc.clone());
+    }
     
-    // Get URL (async method returns RelayUrl)
-    let relay_url = relay.url().await;
+    // Store relay configuration for auto-restart
+    {
+        let mut config_guard = RELAY_CONFIG.lock()
+            .map_err(|e| format!("Failed to lock relay config: {}", e))?;
+        *config_guard = Some((host.clone(), port, db_path.clone()));
+    }
+    
+    // Get URL after storing relay (all MutexGuard are dropped)
+    let relay_url = relay_arc.url().await;
     let url = relay_url.to_string();
     
     // Fix URL: Replace 0.0.0.0 with 127.0.0.1 for client connections
@@ -309,16 +327,209 @@ async fn start_relay_async(host: String, port: u16, db_path: String, log_file_pa
         url.clone()
     };
     
-    // Log relay start
-    tracing::info!("Relay started on {}", client_url);
-    tracing::info!("Log file: {}", log_file_path);
+    // Store client URL
+    {
+        let mut url_guard = RELAY_CLIENT_URL.lock()
+            .map_err(|e| format!("Failed to lock client URL: {}", e))?;
+        *url_guard = Some(client_url.clone());
+    }
     
-    // Store relay instance
+    tracing::info!("✅ Relay started on {}", client_url);
+    tracing::info!("Log file: {}", log_file_path_str);
+    
+    // Start relay in background with auto-restart on fatal errors
+    let host_for_monitor = host.clone();
+    let port_for_monitor = port;
+    let db_path_for_monitor = db_path.clone();
+    
+    tokio::spawn(async move {
+        let mut restart_count = 0;
+        const MAX_RESTART_ATTEMPTS: u32 = 10;
+        const RESTART_DELAY_SECS: u64 = 2;
+        
+        loop {
+            // Get current relay instance
+            let current_relay = {
+                let relay_guard = RELAY_INSTANCE.lock().ok();
+                if let Some(guard) = relay_guard {
+                    guard.as_ref().cloned()
+                } else {
+                    None
+                }
+            };
+            
+            // Check if relay should still be running
+            let relay = match current_relay {
+                Some(r) => r,
+                None => {
+                    tracing::info!("Relay stopped by user, exiting monitor loop");
+                    break;
+                }
+            };
+            
+            // Run relay (this will block until relay stops)
+            let result = relay.run().await;
+            
+            match result {
+                Ok(_) => {
+                    tracing::info!("Relay stopped normally");
+                    break;
+                }
+                Err(e) => {
+                    // Check if error is a fatal socket error
+                    let error_string = e.to_string();
+                    let is_fatal = match &e {
+                        RelayError::IO(io_err) => {
+                            // Directly check the IO error kind for fatal socket errors
+                            fatal_socket_error(io_err)
+                        }
+                        _ => {
+                            // For non-IO errors, check error string as fallback
+                            error_string.contains("BrokenPipe")
+                                || error_string.contains("broken pipe")
+                        }
+                    };
+                    
+                    if is_fatal {
+                        restart_count += 1;
+                        if restart_count <= MAX_RESTART_ATTEMPTS {
+                            tracing::warn!(
+                                "Fatal socket error detected: {} (attempt {}/{})",
+                                error_string,
+                                restart_count,
+                                MAX_RESTART_ATTEMPTS
+                            );
+                            tracing::info!("Attempting to restart relay in {} seconds...", RESTART_DELAY_SECS);
+                            
+                            tokio::time::sleep(tokio::time::Duration::from_secs(RESTART_DELAY_SECS)).await;
+                            
+                            // Restart relay by recreating it (without creating new monitor loop)
+                            // Use internal function to avoid Send issues
+                            match recreate_relay_instance(
+                                host_for_monitor.clone(),
+                                port_for_monitor,
+                                db_path_for_monitor.clone(),
+                            ).await {
+                                Ok(_) => {
+                                    tracing::info!("Relay fully restarted successfully");
+                                    restart_count = 0; // Reset counter on successful restart
+                                    // Continue loop to run the new relay
+                                }
+                                Err(restart_err) => {
+                                    tracing::error!("Failed to fully restart relay: {}", restart_err);
+                                    // Continue loop to retry
+                                }
+                            }
+                        } else {
+                            tracing::error!(
+                                "Max restart attempts ({}) reached. Relay will not restart automatically.",
+                                MAX_RESTART_ATTEMPTS
+                            );
+                            break;
+                        }
+                    } else {
+                        tracing::error!("Relay error (non-fatal): {}", error_string);
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    
+    Ok(client_url)
+}
+
+/// Recreate relay instance without creating a new monitor loop
+/// This is used internally by the monitor loop for auto-restart
+async fn recreate_relay_instance(
+    host: String,
+    port: u16,
+    db_path: String,
+) -> Result<(), String> {
+    // Stop and clean up old instance
+    {
+        let relay = {
+            let mut relay_guard = RELAY_INSTANCE.lock()
+                .map_err(|e| format!("Failed to lock relay instance: {}", e))?;
+            relay_guard.take()
+        };
+        
+        if let Some(relay) = relay {
+            relay.shutdown();
+        }
+    }
+    
+    // Clear all global state
+    {
+        if let Ok(mut url_guard) = RELAY_CLIENT_URL.lock() {
+            *url_guard = None;
+        }
+        if let Ok(mut config_guard) = RELAY_CONFIG.lock() {
+            *config_guard = None;
+        }
+        if let Ok(mut db_guard) = RELAY_DATABASE.lock() {
+            *db_guard = None;
+        }
+    }
+    
+    // Brief delay to ensure cleanup
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    
+    // Recreate database
+    let database_arc = {
+        let db_path_buf = PathBuf::from(&db_path);
+        if let Some(parent) = db_path_buf.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create database directory: {}", e))?;
+        }
+        
+        let mut db_guard = RELAY_DATABASE.lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
+        
+        let db = NdbDatabase::open(&db_path)
+            .map_err(|e| format!("Failed to open NDB database: {}", e))?;
+        let db_arc = Arc::new(db);
+        *db_guard = Some(db_arc.clone());
+        db_arc
+    };
+    
+    // Parse IP address
+    let addr: IpAddr = host.parse()
+        .map_err(|e| format!("Invalid IP address '{}': {}", host, e))?;
+    
+    // Build and create new relay
+    let builder = RelayBuilder::default()
+        .addr(addr)
+        .port(port)
+        .database(database_arc);
+    
+    let relay = LocalRelay::new(builder);
+    let relay_arc = Arc::new(relay);
+    
+    // Store relay instance (before await)
     {
         let mut relay_guard = RELAY_INSTANCE.lock()
             .map_err(|e| format!("Failed to lock relay instance: {}", e))?;
-        *relay_guard = Some(Arc::new(relay));
+        *relay_guard = Some(relay_arc.clone());
     }
+    
+    // Store configuration
+    {
+        let mut config_guard = RELAY_CONFIG.lock()
+            .map_err(|e| format!("Failed to lock relay config: {}", e))?;
+        *config_guard = Some((host.clone(), port, db_path.clone()));
+    }
+    
+    // Get URL after storing (all MutexGuard are dropped)
+    let relay_url = relay_arc.url().await;
+    let url = relay_url.to_string();
+    
+    // Fix URL
+    let client_url = if addr.to_string() == "0.0.0.0" {
+        format!("ws://127.0.0.1:{}", port)
+    } else {
+        url.clone()
+    };
     
     // Store client URL
     {
@@ -327,37 +538,85 @@ async fn start_relay_async(host: String, port: u16, db_path: String, log_file_pa
         *url_guard = Some(client_url.clone());
     }
     
-    // Return the client-usable URL
-    Ok(client_url)
+    tracing::info!("✅ Relay recreated on {}", client_url);
+    Ok(())
 }
 
-/// Stop the relay
-pub fn stop_relay() -> Result<(), String> {
+/// Stop the relay and clean up all global data
+pub async fn stop_relay() -> Result<(), String> {
+    // Take relay instance and drop the guard before any await
+    let relay = {
     let mut relay_guard = RELAY_INSTANCE.lock()
         .map_err(|e| format!("Failed to lock relay instance: {}", e))?;
+        relay_guard.take()
+    };
     
-    if let Some(relay) = relay_guard.take() {
+    if let Some(relay) = relay {
+        // Shutdown the relay instance
         relay.shutdown();
+        // relay instance will be dropped here when it goes out of scope
         
         // Clear client URL
+        {
         if let Ok(mut url_guard) = RELAY_CLIENT_URL.lock() {
             *url_guard = None;
+            }
+        }
+        
+        // Clear relay config to prevent auto-restart
+        {
+            if let Ok(mut config_guard) = RELAY_CONFIG.lock() {
+                *config_guard = None;
+            }
+        }
+        
+        // Clear database
+        {
+            if let Ok(mut db_guard) = RELAY_DATABASE.lock() {
+                *db_guard = None;
+            }
         }
         
         // Clear log guard
+        {
         if let Ok(mut guard_storage) = LOG_GUARD.lock() {
             *guard_storage = None;
+            }
         }
         
         tracing::info!("Relay stopped");
         
-        // Flush any remaining logs
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Flush any remaining logs (guard is already dropped, so this is safe)
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         
         Ok(())
     } else {
         Err("Relay is not running".to_string())
     }
+}
+
+/// Restart the relay by stopping (cleaning up all global data) and then starting (reinitializing)
+pub async fn restart_relay() -> Result<String, String> {
+    // Step 1: Get relay configuration before stopping
+    let (host, port, db_path) = {
+        let config_guard = RELAY_CONFIG.lock()
+            .map_err(|e| format!("Failed to lock relay config: {}", e))?;
+        
+        config_guard.as_ref()
+            .cloned()
+            .ok_or_else(|| "Relay is not running, cannot restart".to_string())?
+    };
+    
+    // Step 2: Stop relay (cleans up all global data)
+    tracing::info!("Stopping relay for restart...");
+    stop_relay().await?;
+    
+    // Brief delay to ensure cleanup is complete
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    
+    // Step 3: Start relay (reinitializes all global data and starts monitoring)
+    tracing::info!("Starting relay after restart...");
+    start_relay(host, port, db_path).await
 }
 
 /// Get relay URL (returns client-usable URL)
@@ -411,14 +670,21 @@ pub fn get_relay_stats(db_path: String) -> Result<RelayStats, String> {
 }
 
 fn get_relay_stats_sync(database: Arc<NdbDatabase>) -> Result<RelayStats, String> {
+    // Try to use existing runtime if available, otherwise create a temporary one
     let runtime = {
         let rt_guard = RUNTIME
             .lock()
             .map_err(|e| format!("Failed to lock runtime: {}", e))?;
-        rt_guard
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| "Runtime not initialized".to_string())?
+        
+        if let Some(rt) = rt_guard.as_ref() {
+            // Use existing runtime if relay is running
+            rt.clone()
+        } else {
+            // Create a temporary runtime only for this query (not stored globally)
+            // This avoids polluting global state when relay is not running
+            Arc::new(Runtime::new()
+                .map_err(|e| format!("Failed to create temporary tokio runtime: {}", e))?)
+        }
     };
 
     let db = database.clone();
@@ -432,12 +698,41 @@ fn get_relay_stats_sync(database: Arc<NdbDatabase>) -> Result<RelayStats, String
 // FFI-compatible functions using flutter_rust_bridge
 #[flutter_rust_bridge::frb(sync)]
 pub fn relay_start(host: String, port: u16, db_path: String) -> Result<String, String> {
-    start_relay(host, port, db_path)
+    let runtime = {
+        let mut rt_guard = RUNTIME.lock().map_err(|e| format!("Failed to lock runtime: {}", e))?;
+        if rt_guard.is_none() {
+            let rt = Runtime::new().map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+            *rt_guard = Some(Arc::new(rt));
+        }
+        rt_guard.as_ref().unwrap().clone()
+    };
+    runtime.block_on(start_relay(host, port, db_path))
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn relay_stop() -> Result<(), String> {
-    stop_relay()
+    let runtime = {
+        let rt_guard = RUNTIME.lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+        rt_guard
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| "Runtime not initialized".to_string())?
+    };
+    runtime.block_on(stop_relay())
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn relay_restart() -> Result<String, String> {
+    let runtime = {
+        let rt_guard = RUNTIME.lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+        rt_guard
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| "Runtime not initialized".to_string())?
+    };
+    runtime.block_on(restart_relay())
 }
 
 #[flutter_rust_bridge::frb(sync)]
