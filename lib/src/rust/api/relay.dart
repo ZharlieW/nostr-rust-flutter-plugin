@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `fatal_socket_error`, `get_relay_stats_sync`, `limit_log_file_lines`, `setup_log_file`
+// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `fatal_socket_error`, `get_relay_stats_sync`, `limit_log_file_lines`, `recreate_relay_instance`, `setup_log_file`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// Start the relay
@@ -43,7 +43,7 @@ Future<bool> isRelayRunning() =>
 Future<RelayStats> getRelayStats({required String dbPath}) =>
     RustLib.instance.api.crateApiRelayGetRelayStats(dbPath: dbPath);
 
-String relayStart({
+Future<String> relayStart({
   required String host,
   required int port,
   required String dbPath,
@@ -53,15 +53,17 @@ String relayStart({
   dbPath: dbPath,
 );
 
-void relayStop() => RustLib.instance.api.crateApiRelayRelayStop();
+Future<void> relayStop() => RustLib.instance.api.crateApiRelayRelayStop();
 
-String relayRestart() => RustLib.instance.api.crateApiRelayRelayRestart();
+Future<String> relayRestart() =>
+    RustLib.instance.api.crateApiRelayRelayRestart();
 
-String relayGetUrl() => RustLib.instance.api.crateApiRelayRelayGetUrl();
+Future<String> relayGetUrl() => RustLib.instance.api.crateApiRelayRelayGetUrl();
 
-bool relayIsRunning() => RustLib.instance.api.crateApiRelayRelayIsRunning();
+Future<bool> relayIsRunning() =>
+    RustLib.instance.api.crateApiRelayRelayIsRunning();
 
-RelayStats relayGetStats({required String dbPath}) =>
+Future<RelayStats> relayGetStats({required String dbPath}) =>
     RustLib.instance.api.crateApiRelayRelayGetStats(dbPath: dbPath);
 
 /// Get log file path
@@ -74,13 +76,13 @@ Future<String> getLogFilePath() =>
 Future<String> readLogFile({int? maxLines}) =>
     RustLib.instance.api.crateApiRelayReadLogFile(maxLines: maxLines);
 
-String relayGetLogFilePath() =>
+Future<String> relayGetLogFilePath() =>
     RustLib.instance.api.crateApiRelayRelayGetLogFilePath();
 
-String relayReadLogFile({int? maxLines}) =>
+Future<String> relayReadLogFile({int? maxLines}) =>
     RustLib.instance.api.crateApiRelayRelayReadLogFile(maxLines: maxLines);
 
-void relayClearLogFile() =>
+Future<void> relayClearLogFile() =>
     RustLib.instance.api.crateApiRelayRelayClearLogFile();
 
 /// Relay configuration

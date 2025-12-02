@@ -2,6 +2,8 @@ use nostr::event::{EventBuilder, EventId, Kind, Tag};
 use nostr::key::{Keys, PublicKey, SecretKey};
 use nostr::nips::nip04;
 use nostr::nips::nip44;
+use nostr::nips::nip49::{EncryptedSecretKey, KeySecurity};
+use nostr::nips::nip19::{FromBech32, ToBech32};
 use nostr::secp256k1::schnorr::Signature;
 use nostr::types::time::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -24,8 +26,7 @@ pub struct NostrKeys {
     pub private_key: String,
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn generate_keys() -> Result<NostrKeys, String> {
+pub async fn generate_keys() -> Result<NostrKeys, String> {
     let keys = Keys::generate();
     Ok(NostrKeys {
         public_key: keys.public_key().to_hex(),
@@ -33,8 +34,7 @@ pub fn generate_keys() -> Result<NostrKeys, String> {
     })
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_public_key_from_private(private_key: String) -> Result<String, String> {
+pub async fn get_public_key_from_private(private_key: String) -> Result<String, String> {
     let private_key =
         SecretKey::from_str(&private_key).map_err(|e| format!("Invalid private key: {}", e))?;
 
@@ -42,8 +42,7 @@ pub fn get_public_key_from_private(private_key: String) -> Result<String, String
     Ok(keys.public_key().to_hex())
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn nip04_encrypt(
+pub async fn nip04_encrypt(
     plaintext: String,
     public_key: String,
     private_key: String,
@@ -61,8 +60,7 @@ pub fn nip04_encrypt(
     Ok(encrypted)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn nip04_decrypt(
+pub async fn nip04_decrypt(
     ciphertext: String,
     public_key: String,
     private_key: String,
@@ -80,8 +78,7 @@ pub fn nip04_decrypt(
     Ok(decrypted)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn nip44_encrypt(
+pub async fn nip44_encrypt(
     plaintext: String,
     public_key: String,
     private_key: String,
@@ -99,8 +96,7 @@ pub fn nip44_encrypt(
     Ok(encrypted)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn nip44_decrypt(
+pub async fn nip44_decrypt(
     ciphertext: String,
     public_key: String,
     private_key: String,
@@ -118,8 +114,7 @@ pub fn nip44_decrypt(
     Ok(decrypted)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn sign_event(event_json: String, private_key: String) -> Result<String, String> {
+pub async fn sign_event(event_json: String, private_key: String) -> Result<String, String> {
     let private_key =
         SecretKey::from_str(&private_key).map_err(|e| format!("Invalid private key: {}", e))?;
 
@@ -180,8 +175,7 @@ pub fn sign_event(event_json: String, private_key: String) -> Result<String, Str
     Ok(signed_event_json)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn verify_event(event: NostrEvent) -> Result<bool, String> {
+pub async fn verify_event(event: NostrEvent) -> Result<bool, String> {
     let event_id = EventId::from_str(&event.id).map_err(|e| format!("Invalid event ID: {}", e))?;
     let pubkey =
         PublicKey::from_str(&event.pubkey).map_err(|e| format!("Invalid public key: {}", e))?;
@@ -209,8 +203,61 @@ pub fn verify_event(event: NostrEvent) -> Result<bool, String> {
     Ok(nostr_event.verify().is_ok())
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn greet(name: String) -> String {
+/// Encrypt private key using NIP-49 (ncryptsec1)
+/// 
+/// # Arguments
+/// * `private_key` - Private key in hex format (64 characters)
+/// * `password` - Password for encryption
+/// * `log_n` - Scrypt log2(N) parameter (12-22, default 16)
+/// * `key_security` - Key security level: 0=Weak, 1=Medium, 2=Unknown (default)
+pub async fn nip49_encrypt(
+    private_key: String,
+    password: String,
+    log_n: Option<u8>,
+    key_security: Option<u8>,
+) -> Result<String, String> {
+    let secret_key =
+        SecretKey::from_str(&private_key).map_err(|e| format!("Invalid private key: {}", e))?;
+
+    let log_n = log_n.unwrap_or(16);
+    if log_n < 12 || log_n > 22 {
+        return Err("log_n must be between 12 and 22".to_string());
+    }
+
+    let key_security = match key_security.unwrap_or(2) {
+        0 => KeySecurity::Weak,
+        1 => KeySecurity::Medium,
+        2 => KeySecurity::Unknown,
+        v => return Err(format!("Invalid key_security: {v}, must be 0, 1, or 2")),
+    };
+
+    let encrypted = EncryptedSecretKey::new(&secret_key, &password, log_n, key_security)
+        .map_err(|e| format!("NIP-49 encryption failed: {}", e))?;
+
+    let ncryptsec = encrypted
+        .to_bech32()
+        .map_err(|e| format!("Failed to encode to bech32: {}", e))?;
+
+    Ok(ncryptsec)
+}
+
+/// Decrypt private key from NIP-49 (ncryptsec1) format
+/// 
+/// # Arguments
+/// * `ncryptsec` - Encrypted private key in ncryptsec1 format
+/// * `password` - Password for decryption
+pub async fn nip49_decrypt(ncryptsec: String, password: String) -> Result<String, String> {
+    let encrypted = EncryptedSecretKey::from_bech32(&ncryptsec)
+        .map_err(|e| format!("Invalid ncryptsec format: {}", e))?;
+
+    let secret_key = encrypted
+        .decrypt(&password)
+        .map_err(|e| format!("NIP-49 decryption failed: {}", e))?;
+
+    Ok(secret_key.to_secret_hex())
+}
+
+pub async fn greet(name: String) -> String {
     format!("Hello, {name}!")
 }
 

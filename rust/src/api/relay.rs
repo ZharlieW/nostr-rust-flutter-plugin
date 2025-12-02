@@ -342,7 +342,19 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
     let port_for_monitor = port;
     let db_path_for_monitor = db_path.clone();
     
+    // Use a channel to wait for relay to actually start listening
+    let (tx, mut rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+    
+    // Spawn relay run task
     tokio::spawn(async move {
+        // Wait a brief moment for relay to start listening
+        // This gives the relay time to bind to the port and start accepting connections
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        
+        // Signal that relay startup is complete
+        let _ = tx.send(Ok(()));
+        
+        // Now start the relay run loop
         let mut restart_count = 0;
         const MAX_RESTART_ATTEMPTS: u32 = 10;
         const RESTART_DELAY_SECS: u64 = 2;
@@ -435,6 +447,26 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
             }
         }
     });
+    
+    // Wait for relay to be ready (with timeout)
+    tokio::select! {
+        result = &mut rx => {
+            match result {
+                Ok(Ok(_)) => {
+                    tracing::info!("Relay startup confirmed, ready to accept connections");
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!("Relay startup reported error: {}", e);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to wait for relay startup signal: {}", e);
+                }
+            }
+        }
+        _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
+            tracing::warn!("Timeout waiting for relay startup confirmation, continuing anyway");
+        }
+    }
     
     Ok(client_url)
 }
@@ -696,58 +728,28 @@ fn get_relay_stats_sync(database: Arc<NdbDatabase>) -> Result<RelayStats, String
 }
 
 // FFI-compatible functions using flutter_rust_bridge
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_start(host: String, port: u16, db_path: String) -> Result<String, String> {
-    let runtime = {
-        let mut rt_guard = RUNTIME.lock().map_err(|e| format!("Failed to lock runtime: {}", e))?;
-        if rt_guard.is_none() {
-            let rt = Runtime::new().map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
-            *rt_guard = Some(Arc::new(rt));
-        }
-        rt_guard.as_ref().unwrap().clone()
-    };
-    runtime.block_on(start_relay(host, port, db_path))
+pub async fn relay_start(host: String, port: u16, db_path: String) -> Result<String, String> {
+    start_relay(host, port, db_path).await
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_stop() -> Result<(), String> {
-    let runtime = {
-        let rt_guard = RUNTIME.lock()
-            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
-        rt_guard
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| "Runtime not initialized".to_string())?
-    };
-    runtime.block_on(stop_relay())
+pub async fn relay_stop() -> Result<(), String> {
+    stop_relay().await
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_restart() -> Result<String, String> {
-    let runtime = {
-        let rt_guard = RUNTIME.lock()
-            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
-        rt_guard
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| "Runtime not initialized".to_string())?
-    };
-    runtime.block_on(restart_relay())
+pub async fn relay_restart() -> Result<String, String> {
+    restart_relay().await
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_get_url() -> Result<String, String> {
-    get_relay_url()
+pub async fn relay_get_url() -> Result<String, String> {
+    Ok(get_relay_url()?)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_is_running() -> bool {
+pub async fn relay_is_running() -> bool {
     is_relay_running()
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_get_stats(db_path: String) -> Result<RelayStats, String> {
-    get_relay_stats(db_path)
+pub async fn relay_get_stats(db_path: String) -> Result<RelayStats, String> {
+    Ok(get_relay_stats(db_path)?)
 }
 
 /// Get log file path
@@ -816,18 +818,15 @@ pub fn read_log_file(max_lines: Option<u32>) -> Result<String, String> {
     }
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_get_log_file_path() -> Result<String, String> {
-    get_log_file_path()
+pub async fn relay_get_log_file_path() -> Result<String, String> {
+    Ok(get_log_file_path()?)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_read_log_file(max_lines: Option<u32>) -> Result<String, String> {
-    read_log_file(max_lines)
+pub async fn relay_read_log_file(max_lines: Option<u32>) -> Result<String, String> {
+    Ok(read_log_file(max_lines)?)
 }
 
-#[flutter_rust_bridge::frb(sync)]
-pub fn relay_clear_log_file() -> Result<(), String> {
-    clear_log_file()
+pub async fn relay_clear_log_file() -> Result<(), String> {
+    Ok(clear_log_file()?)
 }
 

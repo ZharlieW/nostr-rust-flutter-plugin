@@ -8,14 +8,15 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`
 
-NostrKeys generateKeys() => RustLib.instance.api.crateApiNostrGenerateKeys();
+Future<NostrKeys> generateKeys() =>
+    RustLib.instance.api.crateApiNostrGenerateKeys();
 
-String getPublicKeyFromPrivate({required String privateKey}) => RustLib
+Future<String> getPublicKeyFromPrivate({required String privateKey}) => RustLib
     .instance
     .api
     .crateApiNostrGetPublicKeyFromPrivate(privateKey: privateKey);
 
-String nip04Encrypt({
+Future<String> nip04Encrypt({
   required String plaintext,
   required String publicKey,
   required String privateKey,
@@ -25,7 +26,7 @@ String nip04Encrypt({
   privateKey: privateKey,
 );
 
-String nip04Decrypt({
+Future<String> nip04Decrypt({
   required String ciphertext,
   required String publicKey,
   required String privateKey,
@@ -35,7 +36,7 @@ String nip04Decrypt({
   privateKey: privateKey,
 );
 
-String nip44Encrypt({
+Future<String> nip44Encrypt({
   required String plaintext,
   required String publicKey,
   required String privateKey,
@@ -45,7 +46,7 @@ String nip44Encrypt({
   privateKey: privateKey,
 );
 
-String nip44Decrypt({
+Future<String> nip44Decrypt({
   required String ciphertext,
   required String publicKey,
   required String privateKey,
@@ -55,16 +56,50 @@ String nip44Decrypt({
   privateKey: privateKey,
 );
 
-String signEvent({required String eventJson, required String privateKey}) =>
-    RustLib.instance.api.crateApiNostrSignEvent(
-      eventJson: eventJson,
-      privateKey: privateKey,
-    );
+Future<String> signEvent({
+  required String eventJson,
+  required String privateKey,
+}) => RustLib.instance.api.crateApiNostrSignEvent(
+  eventJson: eventJson,
+  privateKey: privateKey,
+);
 
-bool verifyEvent({required NostrEvent event}) =>
+Future<bool> verifyEvent({required NostrEvent event}) =>
     RustLib.instance.api.crateApiNostrVerifyEvent(event: event);
 
-String greet({required String name}) =>
+/// Encrypt private key using NIP-49 (ncryptsec1)
+///
+/// # Arguments
+/// * `private_key` - Private key in hex format (64 characters)
+/// * `password` - Password for encryption
+/// * `log_n` - Scrypt log2(N) parameter (12-22, default 16)
+/// * `key_security` - Key security level: 0=Weak, 1=Medium, 2=Unknown (default)
+Future<String> nip49Encrypt({
+  required String privateKey,
+  required String password,
+  int? logN,
+  int? keySecurity,
+}) => RustLib.instance.api.crateApiNostrNip49Encrypt(
+  privateKey: privateKey,
+  password: password,
+  logN: logN,
+  keySecurity: keySecurity,
+);
+
+/// Decrypt private key from NIP-49 (ncryptsec1) format
+///
+/// # Arguments
+/// * `ncryptsec` - Encrypted private key in ncryptsec1 format
+/// * `password` - Password for decryption
+Future<String> nip49Decrypt({
+  required String ncryptsec,
+  required String password,
+}) => RustLib.instance.api.crateApiNostrNip49Decrypt(
+  ncryptsec: ncryptsec,
+  password: password,
+);
+
+Future<String> greet({required String name}) =>
     RustLib.instance.api.crateApiNostrGreet(name: name);
 
 class NostrEvent {
