@@ -602,10 +602,14 @@ pub async fn stop_relay() -> Result<(), String> {
             }
         }
         
-        // Clear database
+        // Clear database - explicitly drop to release file locks
         {
             if let Ok(mut db_guard) = RELAY_DATABASE.lock() {
-                *db_guard = None;
+                if let Some(db) = db_guard.take() {
+                    // Explicitly drop the Arc and wait for underlying resources to be freed
+                    drop(db);
+                    tracing::info!("Database connection closed");
+                }
             }
         }
         
@@ -618,8 +622,9 @@ pub async fn stop_relay() -> Result<(), String> {
         
         tracing::info!("Relay stopped");
         
-        // Flush any remaining logs (guard is already dropped, so this is safe)
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Wait longer to ensure all file handles and locks are released by the OS
+        // This is critical for LMDB database files (data.mdb, lock.mdb)
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         
         Ok(())
     } else {
@@ -643,8 +648,11 @@ pub async fn restart_relay() -> Result<String, String> {
     tracing::info!("Stopping relay for restart...");
     stop_relay().await?;
     
-    // Brief delay to ensure cleanup is complete
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    // Longer delay to ensure complete resource cleanup
+    // This gives the OS time to release database file locks (LMDB lock.mdb)
+    // and other file handles that might cause IO errors on restart
+    tracing::info!("Waiting for complete resource cleanup...");
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     
     // Step 3: Start relay (reinitializes all global data and starts monitoring)
     tracing::info!("Starting relay after restart...");
