@@ -14,6 +14,7 @@ use libc::{pthread_set_qos_class_self_np, qos_class_t};
 /// TLS proxy server that bridges WSS connections to local WS relay
 /// Uses tokio-rustls which properly sends the full certificate chain
 pub struct TlsProxyServer {
+    host: String,
     tls_port: u16,
     ws_port: u16,
     server_config: Arc<ServerConfig>,
@@ -24,11 +25,13 @@ impl TlsProxyServer {
     /// Create a new TLS proxy server
     /// 
     /// # Arguments
+    /// * `host` - IP address to bind to (e.g., "127.0.0.1" or "0.0.0.0")
     /// * `tls_port` - Port to listen for WSS connections
     /// * `ws_port` - Port of the local WS relay to forward to
     /// * `fullchain_pem_path` - Path to fullchain.pem (contains server cert + intermediate certs)
     /// * `private_key_path` - Path to private key file
     pub fn new(
+        host: String,
         tls_port: u16,
         ws_port: u16,
         fullchain_pem_path: String,
@@ -50,6 +53,7 @@ impl TlsProxyServer {
             .map_err(|e| format!("Failed to create TLS server config: {}", e))?;
         
         Ok(Self {
+            host,
             tls_port,
             ws_port,
             server_config: Arc::new(server_config),
@@ -63,7 +67,7 @@ impl TlsProxyServer {
             return Err("TLS proxy server is already running".to_string());
         }
         
-        let addr = format!("0.0.0.0:{}", self.tls_port);
+        let addr = format!("{}:{}", self.host, self.tls_port);
         let listener = TcpListener::bind(&addr)
             .await
             .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
@@ -267,12 +271,14 @@ fn create_runtime_in_thread() -> Result<(Arc<Runtime>, thread::JoinHandle<()>), 
 /// certificate chain (server cert + intermediate certs) in the correct order.
 /// 
 /// # Arguments
+/// * `host` - IP address to bind to (e.g., "127.0.0.1" or "0.0.0.0"). Use "127.0.0.1" on iOS to avoid iCloud Private Relay conflicts.
 /// * `tls_port` - Port to listen for WSS connections (e.g., 28443)
 /// * `ws_port` - Port of the local WS relay to forward to (e.g., 8081)
 /// * `fullchain_pem` - Full certificate chain in PEM format (as string)
 /// * `private_key_pem` - Private key in PEM format (as string)
 #[frb(sync)]
 pub fn tls_proxy_start(
+    host: String,
     tls_port: u16,
     ws_port: u16,
     fullchain_pem: String,
@@ -294,6 +300,7 @@ pub fn tls_proxy_start(
     
     // Create new server
     let mut server = TlsProxyServer::new(
+        host,
         tls_port,
         ws_port,
         fullchain_path.to_string_lossy().to_string(),

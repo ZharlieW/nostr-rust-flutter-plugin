@@ -68,6 +68,7 @@ fn wire__crate__api__tls_proxy__TlsProxyServer_new_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_host = <String>::sse_decode(&mut deserializer);
             let api_tls_port = <u16>::sse_decode(&mut deserializer);
             let api_ws_port = <u16>::sse_decode(&mut deserializer);
             let api_fullchain_pem_path = <String>::sse_decode(&mut deserializer);
@@ -76,6 +77,7 @@ fn wire__crate__api__tls_proxy__TlsProxyServer_new_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::tls_proxy::TlsProxyServer::new(
+                        api_host,
                         api_tls_port,
                         api_ws_port,
                         api_fullchain_pem_path,
@@ -1278,6 +1280,7 @@ fn wire__crate__api__tls_proxy__tls_proxy_start_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_host = <String>::sse_decode(&mut deserializer);
             let api_tls_port = <u16>::sse_decode(&mut deserializer);
             let api_ws_port = <u16>::sse_decode(&mut deserializer);
             let api_fullchain_pem = <String>::sse_decode(&mut deserializer);
@@ -1285,6 +1288,7 @@ fn wire__crate__api__tls_proxy__tls_proxy_start_impl(
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::tls_proxy::tls_proxy_start(
+                    api_host,
                     api_tls_port,
                     api_ws_port,
                     api_fullchain_pem,

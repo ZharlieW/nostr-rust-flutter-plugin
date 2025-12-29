@@ -18,16 +18,19 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// certificate chain (server cert + intermediate certs) in the correct order.
 ///
 /// # Arguments
+/// * `host` - IP address to bind to (e.g., "127.0.0.1" or "0.0.0.0"). Use "127.0.0.1" on iOS to avoid iCloud Private Relay conflicts.
 /// * `tls_port` - Port to listen for WSS connections (e.g., 28443)
 /// * `ws_port` - Port of the local WS relay to forward to (e.g., 8081)
 /// * `fullchain_pem` - Full certificate chain in PEM format (as string)
 /// * `private_key_pem` - Private key in PEM format (as string)
 void tlsProxyStart({
+  required String host,
   required int tlsPort,
   required int wsPort,
   required String fullchainPem,
   required String privateKeyPem,
 }) => RustLib.instance.api.crateApiTlsProxyTlsProxyStart(
+  host: host,
   tlsPort: tlsPort,
   wsPort: wsPort,
   fullchainPem: fullchainPem,
@@ -43,16 +46,19 @@ abstract class TlsProxyServer implements RustOpaqueInterface {
   /// Create a new TLS proxy server
   ///
   /// # Arguments
+  /// * `host` - IP address to bind to (e.g., "127.0.0.1" or "0.0.0.0")
   /// * `tls_port` - Port to listen for WSS connections
   /// * `ws_port` - Port of the local WS relay to forward to
   /// * `fullchain_pem_path` - Path to fullchain.pem (contains server cert + intermediate certs)
   /// * `private_key_path` - Path to private key file
   static Future<TlsProxyServer> newInstance({
+    required String host,
     required int tlsPort,
     required int wsPort,
     required String fullchainPemPath,
     required String privateKeyPath,
   }) => RustLib.instance.api.crateApiTlsProxyTlsProxyServerNew(
+    host: host,
     tlsPort: tlsPort,
     wsPort: wsPort,
     fullchainPemPath: fullchainPemPath,

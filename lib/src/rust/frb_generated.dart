@@ -78,6 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
 abstract class RustLibApi extends BaseApi {
   Future<TlsProxyServer> crateApiTlsProxyTlsProxyServerNew({
+    required String host,
     required int tlsPort,
     required int wsPort,
     required String fullchainPemPath,
@@ -188,6 +189,7 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiRelayStopRelay();
 
   void crateApiTlsProxyTlsProxyStart({
+    required String host,
     required int tlsPort,
     required int wsPort,
     required String fullchainPem,
@@ -218,6 +220,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<TlsProxyServer> crateApiTlsProxyTlsProxyServerNew({
+    required String host,
     required int tlsPort,
     required int wsPort,
     required String fullchainPemPath,
@@ -227,6 +230,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(host, serializer);
           sse_encode_u_16(tlsPort, serializer);
           sse_encode_u_16(wsPort, serializer);
           sse_encode_String(fullchainPemPath, serializer);
@@ -244,7 +248,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTlsProxyTlsProxyServerNewConstMeta,
-        argValues: [tlsPort, wsPort, fullchainPemPath, privateKeyPath],
+        argValues: [host, tlsPort, wsPort, fullchainPemPath, privateKeyPath],
         apiImpl: this,
       ),
     );
@@ -253,7 +257,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTlsProxyTlsProxyServerNewConstMeta =>
       const TaskConstMeta(
         debugName: "TlsProxyServer_new",
-        argNames: ["tlsPort", "wsPort", "fullchainPemPath", "privateKeyPath"],
+        argNames: [
+          "host",
+          "tlsPort",
+          "wsPort",
+          "fullchainPemPath",
+          "privateKeyPath",
+        ],
       );
 
   @override
@@ -1203,6 +1213,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiTlsProxyTlsProxyStart({
+    required String host,
     required int tlsPort,
     required int wsPort,
     required String fullchainPem,
@@ -1212,6 +1223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(host, serializer);
           sse_encode_u_16(tlsPort, serializer);
           sse_encode_u_16(wsPort, serializer);
           sse_encode_String(fullchainPem, serializer);
@@ -1223,7 +1235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTlsProxyTlsProxyStartConstMeta,
-        argValues: [tlsPort, wsPort, fullchainPem, privateKeyPem],
+        argValues: [host, tlsPort, wsPort, fullchainPem, privateKeyPem],
         apiImpl: this,
       ),
     );
@@ -1232,7 +1244,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTlsProxyTlsProxyStartConstMeta =>
       const TaskConstMeta(
         debugName: "tls_proxy_start",
-        argNames: ["tlsPort", "wsPort", "fullchainPem", "privateKeyPem"],
+        argNames: [
+          "host",
+          "tlsPort",
+          "wsPort",
+          "fullchainPem",
+          "privateKeyPem",
+        ],
       );
 
   @override
