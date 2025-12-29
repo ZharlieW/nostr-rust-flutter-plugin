@@ -8,6 +8,9 @@ use tokio_rustls::TlsAcceptor;
 use tokio::runtime::Runtime;
 use std::fs;
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use libc::{pthread_set_qos_class_self_np, qos_class_t};
+
 /// TLS proxy server that bridges WSS connections to local WS relay
 /// Uses tokio-rustls which properly sends the full certificate chain
 pub struct TlsProxyServer {
@@ -227,6 +230,18 @@ fn create_runtime_in_thread() -> Result<(Arc<Runtime>, thread::JoinHandle<()>), 
     let (tx, rx) = std::sync::mpsc::channel();
     
     let thread_handle = thread::spawn(move || {
+        // Set thread QoS to User-initiated to avoid priority inversion
+        // This ensures the background thread has sufficient priority when
+        // the main thread (User-interactive) is waiting on it
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            unsafe {
+                // QOS_CLASS_USER_INITIATED = 0x19
+                // Second parameter is relative priority (0 = default)
+                pthread_set_qos_class_self_np(qos_class_t::QOS_CLASS_USER_INITIATED, 0);
+            }
+        }
+        
         let rt = Runtime::new().expect("Failed to create tokio runtime");
         let rt_arc = Arc::new(rt);
         tx.send(rt_arc.clone()).expect("Failed to send runtime");
