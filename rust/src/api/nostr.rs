@@ -1,4 +1,4 @@
-use nostr::event::{EventBuilder, EventId, Kind, Tag};
+use nostr::event::{EventBuilder, EventId, Kind, Tag, UnsignedEvent};
 use nostr::key::{Keys, PublicKey, SecretKey};
 use nostr::nips::nip04;
 use nostr::nips::nip44;
@@ -6,6 +6,7 @@ use nostr::nips::nip49::{EncryptedSecretKey, KeySecurity};
 use nostr::nips::nip19::{FromBech32, ToBech32};
 use nostr::secp256k1::schnorr::Signature;
 use nostr::types::time::Timestamp;
+use nostr::util::JsonUtil;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -120,56 +121,20 @@ pub async fn sign_event(event_json: String, private_key: String) -> Result<Strin
 
     let keys = Keys::new(private_key);
 
-    // Parse the event from JSON
-    let event_data: serde_json::Value =
-        serde_json::from_str(&event_json).map_err(|e| format!("Invalid JSON: {}", e))?;
+    // Parse the unsigned event directly from JSON using nostr's built-in method
+    // This ensures all fields (including tags) are preserved correctly
+    let unsigned_event = UnsignedEvent::from_json(&event_json)
+        .map_err(|e| format!("Failed to parse event JSON: {}", e))?;
 
-    // Extract fields
-    let pubkey = event_data["pubkey"]
-        .as_str()
-        .ok_or("Missing pubkey field")?;
-    let created_at = event_data["created_at"]
-        .as_u64()
-        .ok_or("Missing or invalid created_at field")?;
-    let kind = event_data["kind"]
-        .as_u64()
-        .ok_or("Missing or invalid kind field")?;
-    let content = event_data["content"].as_str().unwrap_or("");
-
-    // Parse tags
-    let tags: Vec<Vec<String>> = event_data["tags"]
-        .as_array()
-        .ok_or("Missing or invalid tags field")?
-        .iter()
-        .map(|tag| {
-            tag.as_array().ok_or("Invalid tag format").map(|arr| {
-                arr.iter()
-                    .map(|v| v.as_str().unwrap_or("").to_string())
-                    .collect::<Vec<String>>()
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| "Invalid tags format")?;
-
-    // Convert tags to nostr format
-    let nostr_tags: Vec<Tag> = tags
-        .into_iter()
-        .map(|tag_vec| {
-            let tag_strings: Vec<String> = tag_vec.into_iter().map(|s| s.to_string()).collect();
-            Tag::parse(&tag_strings)
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Invalid tags: {}", e))?;
-
-    // Create and sign the event using EventBuilder
-    let event = EventBuilder::new(Kind::from(kind as u16), content)
-        .tags(nostr_tags)
-        .custom_created_at(Timestamp::from(created_at))
+    // Sign the unsigned event
+    // This will compute the event ID, sign it, and create a complete Event
+    let event = unsigned_event
         .sign_with_keys(&keys)
-        .map_err(|e| format!("Failed to create and sign event: {}", e))?;
+        .map_err(|e| format!("Failed to sign event: {}", e))?;
 
     // Convert back to JSON string
-    let signed_event_json = serde_json::to_string(&event)
+    let signed_event_json = event
+        .try_as_json()
         .map_err(|e| format!("Failed to serialize signed event: {}", e))?;
 
     Ok(signed_event_json)
