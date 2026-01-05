@@ -222,16 +222,6 @@ static LOG_FILE_PATH: Mutex<Option<String>> = Mutex::new(None);
 static LOG_GUARD: Mutex<Option<WorkerGuard>> = Mutex::new(None);
 static RELAY_CONFIG: Mutex<Option<(String, u16, String)>> = Mutex::new(None);
 
-/// Check if an IO error is a fatal socket error that requires reconnection
-fn fatal_socket_error(err: &io::Error) -> bool {
-    matches!(
-        err.kind(),
-        io::ErrorKind::NotConnected
-            | io::ErrorKind::BrokenPipe
-            | io::ErrorKind::ConnectionReset
-    )
-}
-
 /// Relay configuration
 #[derive(Debug, Clone)]
 pub struct RelayConfig {
@@ -309,7 +299,7 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
         *relay_guard = Some(relay_arc.clone());
     }
     
-    // Store relay configuration for auto-restart
+    // Store relay configuration for manual restart
     {
         let mut config_guard = RELAY_CONFIG.lock()
             .map_err(|e| format!("Failed to lock relay config: {}", e))?;
@@ -337,15 +327,10 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
     tracing::info!("✅ Relay started on {}", client_url);
     tracing::info!("Log file: {}", log_file_path_str);
     
-    // Start relay in background with auto-restart on fatal errors
-    let host_for_monitor = host.clone();
-    let port_for_monitor = port;
-    let db_path_for_monitor = db_path.clone();
-    
     // Use a channel to wait for relay to actually start listening
     let (tx, mut rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
     
-    // Spawn relay run task
+    // Spawn relay run task in background
     tokio::spawn(async move {
         // Wait a brief moment for relay to start listening
         // This gives the relay time to bind to the port and start accepting connections
@@ -354,96 +339,37 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
         // Signal that relay startup is complete
         let _ = tx.send(Ok(()));
         
-        // Now start the relay run loop
-        let mut restart_count = 0;
-        const MAX_RESTART_ATTEMPTS: u32 = 10;
-        const RESTART_DELAY_SECS: u64 = 2;
+        // Get current relay instance
+        let current_relay = {
+            let relay_guard = RELAY_INSTANCE.lock().ok();
+            if let Some(guard) = relay_guard {
+                guard.as_ref().cloned()
+            } else {
+                None
+            }
+        };
         
-        loop {
-            // Get current relay instance
-            let current_relay = {
-                let relay_guard = RELAY_INSTANCE.lock().ok();
-                if let Some(guard) = relay_guard {
-                    guard.as_ref().cloned()
-                } else {
-                    None
-                }
-            };
-            
-            // Check if relay should still be running
-            let relay = match current_relay {
-                Some(r) => r,
-                None => {
-                    tracing::info!("Relay stopped by user, exiting monitor loop");
-                    break;
-                }
-            };
-            
-            // Run relay (this will block until relay stops)
-            let result = relay.run().await;
-            
-            match result {
-                Ok(_) => {
-                    tracing::info!("Relay stopped normally");
-                    break;
-                }
-                Err(e) => {
-                    // Check if error is a fatal socket error
-                    let error_string = e.to_string();
-                    let is_fatal = match &e {
-                        RelayError::IO(io_err) => {
-                            // Directly check the IO error kind for fatal socket errors
-                            fatal_socket_error(io_err)
-                        }
-                        _ => {
-                            // For non-IO errors, check error string as fallback
-                            error_string.contains("BrokenPipe")
-                                || error_string.contains("broken pipe")
-                        }
-                    };
-                    
-                    if is_fatal {
-                        restart_count += 1;
-                        if restart_count <= MAX_RESTART_ATTEMPTS {
-                            tracing::warn!(
-                                "Fatal socket error detected: {} (attempt {}/{})",
-                                error_string,
-                                restart_count,
-                                MAX_RESTART_ATTEMPTS
-                            );
-                            tracing::info!("Attempting to restart relay in {} seconds...", RESTART_DELAY_SECS);
-                            
-                            tokio::time::sleep(tokio::time::Duration::from_secs(RESTART_DELAY_SECS)).await;
-                            
-                            // Restart relay by recreating it (without creating new monitor loop)
-                            // Use internal function to avoid Send issues
-                            match recreate_relay_instance(
-                                host_for_monitor.clone(),
-                                port_for_monitor,
-                                db_path_for_monitor.clone(),
-                            ).await {
-                                Ok(_) => {
-                                    tracing::info!("Relay fully restarted successfully");
-                                    restart_count = 0; // Reset counter on successful restart
-                                    // Continue loop to run the new relay
-                                }
-                                Err(restart_err) => {
-                                    tracing::error!("Failed to fully restart relay: {}", restart_err);
-                                    // Continue loop to retry
-                                }
-                            }
-                        } else {
-                            tracing::error!(
-                                "Max restart attempts ({}) reached. Relay will not restart automatically.",
-                                MAX_RESTART_ATTEMPTS
-                            );
-                            break;
-                        }
-                    } else {
-                        tracing::error!("Relay error (non-fatal): {}", error_string);
-                        break;
-                    }
-                }
+        // Check if relay should still be running
+        let relay = match current_relay {
+            Some(r) => r,
+            None => {
+                tracing::info!("Relay stopped by user, exiting run task");
+                return;
+            }
+        };
+        
+        // Run relay (this will block until relay stops)
+        let result = relay.run().await;
+        
+        // Log result but don't handle errors - let relay continue running if possible
+        match result {
+            Ok(_) => {
+                tracing::info!("Relay stopped normally");
+            }
+            Err(e) => {
+                let error_string = e.to_string();
+                tracing::error!("Relay error: {}", error_string);
+                // Don't exit on error - some errors may not affect relay operation
             }
         }
     });
@@ -471,109 +397,6 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
     Ok(client_url)
 }
 
-/// Recreate relay instance without creating a new monitor loop
-/// This is used internally by the monitor loop for auto-restart
-async fn recreate_relay_instance(
-    host: String,
-    port: u16,
-    db_path: String,
-) -> Result<(), String> {
-    // Stop and clean up old instance
-    {
-        let relay = {
-            let mut relay_guard = RELAY_INSTANCE.lock()
-                .map_err(|e| format!("Failed to lock relay instance: {}", e))?;
-            relay_guard.take()
-        };
-        
-        if let Some(relay) = relay {
-            relay.shutdown();
-        }
-    }
-    
-    // Clear all global state
-    {
-        if let Ok(mut url_guard) = RELAY_CLIENT_URL.lock() {
-            *url_guard = None;
-        }
-        if let Ok(mut config_guard) = RELAY_CONFIG.lock() {
-            *config_guard = None;
-        }
-        if let Ok(mut db_guard) = RELAY_DATABASE.lock() {
-            *db_guard = None;
-        }
-    }
-    
-    // Brief delay to ensure cleanup
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    
-    // Recreate database
-    let database_arc = {
-        let db_path_buf = PathBuf::from(&db_path);
-        if let Some(parent) = db_path_buf.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create database directory: {}", e))?;
-        }
-        
-        let mut db_guard = RELAY_DATABASE.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
-        
-        let db = NdbDatabase::open(&db_path)
-            .map_err(|e| format!("Failed to open NDB database: {}", e))?;
-        let db_arc = Arc::new(db);
-        *db_guard = Some(db_arc.clone());
-        db_arc
-    };
-    
-    // Parse IP address
-    let addr: IpAddr = host.parse()
-        .map_err(|e| format!("Invalid IP address '{}': {}", host, e))?;
-    
-    // Build and create new relay
-    let builder = RelayBuilder::default()
-        .addr(addr)
-        .port(port)
-        .database(database_arc);
-    
-    let relay = LocalRelay::new(builder);
-    let relay_arc = Arc::new(relay);
-    
-    // Store relay instance (before await)
-    {
-        let mut relay_guard = RELAY_INSTANCE.lock()
-            .map_err(|e| format!("Failed to lock relay instance: {}", e))?;
-        *relay_guard = Some(relay_arc.clone());
-    }
-    
-    // Store configuration
-    {
-        let mut config_guard = RELAY_CONFIG.lock()
-            .map_err(|e| format!("Failed to lock relay config: {}", e))?;
-        *config_guard = Some((host.clone(), port, db_path.clone()));
-    }
-    
-    // Get URL after storing (all MutexGuard are dropped)
-    let relay_url = relay_arc.url().await;
-    let url = relay_url.to_string();
-    
-    // Fix URL
-    let client_url = if addr.to_string() == "0.0.0.0" {
-        format!("ws://127.0.0.1:{}", port)
-    } else {
-        url.clone()
-    };
-    
-    // Store client URL
-    {
-        let mut url_guard = RELAY_CLIENT_URL.lock()
-            .map_err(|e| format!("Failed to lock client URL: {}", e))?;
-        *url_guard = Some(client_url.clone());
-    }
-    
-    tracing::info!("✅ Relay recreated on {}", client_url);
-    Ok(())
-}
-
 /// Stop the relay and clean up all global data
 pub async fn stop_relay() -> Result<(), String> {
     // Take relay instance and drop the guard before any await
@@ -595,7 +418,7 @@ pub async fn stop_relay() -> Result<(), String> {
             }
         }
         
-        // Clear relay config to prevent auto-restart
+        // Clear relay config
         {
             if let Ok(mut config_guard) = RELAY_CONFIG.lock() {
                 *config_guard = None;
