@@ -1,4 +1,4 @@
-use nostr_relay_builder::{LocalRelay, RelayBuilder, Error as RelayError};
+use nostr_relay_builder::{LocalRelay, builder::RateLimit};
 use nostr_ndb::NdbDatabase;
 use std::sync::{Arc, Mutex};
 use std::net::IpAddr;
@@ -15,7 +15,6 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::FormatFields;
 use tracing_appender::non_blocking::WorkerGuard;
-use std::io;
 
 /// Setup log file and initialize tracing
 /// Returns the log file path string
@@ -283,13 +282,18 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
         .map_err(|e| format!("Invalid IP address '{}': {}", host, e))?;
     
     // Build new relay with fresh database
-    let builder = RelayBuilder::default()
+    // Configure rate limit: more lenient for local relay
+    let rate_limit = RateLimit {
+        max_reqs: 1000,          // Max active subscriptions per connection (default: 500)
+        notes_per_minute: 600,   // Max events per minute per connection (default: 60)
+    };
+    
+    let relay = LocalRelay::builder()
         .addr(addr)
         .port(port)
-        .database(database_arc);
-    
-    // Create new relay instance
-    let relay = LocalRelay::new(builder);
+        .database(database_arc)
+        .rate_limit(rate_limit)
+        .build();
     
     // Store relay instance first (before any await that might need Send)
     let relay_arc = Arc::new(relay);
