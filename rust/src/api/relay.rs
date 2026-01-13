@@ -514,7 +514,7 @@ pub struct RelayStats {
 }
 
 /// Get relay statistics
-pub fn get_relay_stats(db_path: String) -> Result<RelayStats, String> {
+pub async fn get_relay_stats(db_path: String) -> Result<RelayStats, String> {
     // Get database reference or open it
     let database = {
         let db_guard = RELAY_DATABASE.lock()
@@ -530,35 +530,10 @@ pub fn get_relay_stats(db_path: String) -> Result<RelayStats, String> {
         }
     };
     
-    // Query statistics (sync operation)
-    let stats = get_relay_stats_sync(database)?;
-    
-    Ok(stats)
-}
-
-fn get_relay_stats_sync(database: Arc<NdbDatabase>) -> Result<RelayStats, String> {
-    // Try to use existing runtime if available, otherwise create a temporary one
-    let runtime = {
-        let rt_guard = RUNTIME
-            .lock()
-            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
-        
-        if let Some(rt) = rt_guard.as_ref() {
-            // Use existing runtime if relay is running
-            rt.clone()
-        } else {
-            // Create a temporary runtime only for this query (not stored globally)
-            // This avoids polluting global state when relay is not running
-            Arc::new(Runtime::new()
-                .map_err(|e| format!("Failed to create temporary tokio runtime: {}", e))?)
-        }
-    };
-
-    let db = database.clone();
-    let total_events = runtime
-        .block_on(async move { db.count(Filter::new()).await })
+    // Query statistics directly in async context (no need for runtime creation)
+    let total_events = database.count(Filter::new()).await
         .map_err(|e| format!("Failed to count events: {}", e))? as u64;
-
+    
     Ok(RelayStats { total_events })
 }
 
@@ -581,10 +556,6 @@ pub async fn relay_get_url() -> Result<String, String> {
 
 pub async fn relay_is_running() -> bool {
     is_relay_running()
-}
-
-pub async fn relay_get_stats(db_path: String) -> Result<RelayStats, String> {
-    Ok(get_relay_stats(db_path)?)
 }
 
 /// Get log file path

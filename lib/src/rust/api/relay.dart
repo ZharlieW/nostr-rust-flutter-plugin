@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `fatal_socket_error`, `get_relay_stats_sync`, `limit_log_file_lines`, `recreate_relay_instance`, `setup_log_file`
+// These functions are ignored because they are not marked as `pub`: `clear_log_file`, `limit_log_file_lines`, `setup_log_file`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// Start the relay
@@ -62,9 +62,6 @@ Future<String> relayGetUrl() => RustLib.instance.api.crateApiRelayRelayGetUrl();
 
 Future<bool> relayIsRunning() =>
     RustLib.instance.api.crateApiRelayRelayIsRunning();
-
-Future<RelayStats> relayGetStats({required String dbPath}) =>
-    RustLib.instance.api.crateApiRelayRelayGetStats(dbPath: dbPath);
 
 /// Get log file path
 Future<String> getLogFilePath() =>

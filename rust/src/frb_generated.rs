@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.7.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 62199449;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 265635723;
 
 // Section: executor
 
@@ -307,7 +307,7 @@ fn wire__crate__api__relay__get_relay_stats_impl(
     rust_vec_len_: i32,
     data_len_: i32,
 ) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_relay_stats",
             port: Some(port_),
@@ -325,11 +325,14 @@ fn wire__crate__api__relay__get_relay_stats_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_db_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::relay::get_relay_stats(api_db_path)?;
-                    Ok(output_ok)
-                })())
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::relay::get_relay_stats(api_db_path).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
             }
         },
     )
@@ -851,42 +854,6 @@ fn wire__crate__api__relay__relay_get_log_file_path_impl(
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok = crate::api::relay::relay_get_log_file_path().await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__relay__relay_get_stats_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "relay_get_stats",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_db_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::api::relay::relay_get_stats(api_db_path).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -1615,18 +1582,17 @@ fn pde_ffi_dispatcher_primary_impl(
         21 => {
             wire__crate__api__relay__relay_get_log_file_path_impl(port, ptr, rust_vec_len, data_len)
         }
-        22 => wire__crate__api__relay__relay_get_stats_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__relay__relay_get_url_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__relay__relay_is_running_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__relay__relay_read_log_file_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__relay__relay_restart_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__relay__relay_start_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__relay__relay_stop_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__relay__restart_relay_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__nostr__sign_event_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__relay__start_relay_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__relay__stop_relay_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__nostr__verify_event_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__relay__relay_get_url_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__relay__relay_is_running_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__relay__relay_read_log_file_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__relay__relay_restart_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__relay__relay_start_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__relay__relay_stop_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__relay__restart_relay_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__nostr__sign_event_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__relay__start_relay_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__relay__stop_relay_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__nostr__verify_event_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1639,8 +1605,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        33 => wire__crate__api__tls_proxy__tls_proxy_start_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__tls_proxy__tls_proxy_stop_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__tls_proxy__tls_proxy_start_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__tls_proxy__tls_proxy_stop_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
