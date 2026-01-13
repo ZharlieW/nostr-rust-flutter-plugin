@@ -33,9 +33,8 @@ fn setup_log_file(db_path: &str) -> Result<String, String> {
         *log_path_guard = Some(log_file_path_str.clone());
     }
     
-    // Clear log file to start fresh on each relay start/restart
-    let _ = std::fs::write(&log_file_path, "")
-        .map_err(|e| format!("Failed to clear log file: {}", e));
+    // Limit log file to 200 lines if it exists
+    let _ = limit_log_file_lines(&log_file_path, 200);
     
     // Delete any old rotated log files (cleanup from previous version)
     let log_dir = log_file_path.parent()
@@ -56,13 +55,6 @@ fn setup_log_file(db_path: &str) -> Result<String, String> {
         .append(true)
         .open(&log_file_path)
         .map_err(|e| format!("Failed to open log file: {}", e))?;
-    
-    // Clear old log guard before creating new one to ensure clean restart
-    {
-        let mut guard_storage = LOG_GUARD.lock()
-            .map_err(|e| format!("Failed to lock log guard: {}", e))?;
-        *guard_storage = None;
-    }
     
     // Create non-blocking writer for file logging
     let (non_blocking, guard) = tracing_appender::non_blocking(log_file);
