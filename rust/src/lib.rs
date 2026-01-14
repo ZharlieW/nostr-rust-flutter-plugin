@@ -1,6 +1,9 @@
 pub mod api;
 mod frb_generated;
 
+#[cfg(target_os = "android")]
+mod jni_bridge;
+
 #[cfg(test)]
 mod tests {
     use super::api::nostr::*;
