@@ -1413,9 +1413,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RelayStats dco_decode_relay_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
-    return RelayStats(totalEvents: dco_decode_u_64(arr[0]));
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return RelayStats(
+      totalEvents: dco_decode_u_64(arr[0]),
+      connections: dco_decode_u_64(arr[1]),
+    );
   }
 
   @protected
@@ -1615,7 +1618,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RelayStats sse_decode_relay_stats(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_totalEvents = sse_decode_u_64(deserializer);
-    return RelayStats(totalEvents: var_totalEvents);
+    var var_connections = sse_decode_u_64(deserializer);
+    return RelayStats(
+      totalEvents: var_totalEvents,
+      connections: var_connections,
+    );
   }
 
   @protected
@@ -1812,6 +1819,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_relay_stats(RelayStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.totalEvents, serializer);
+    sse_encode_u_64(self.connections, serializer);
   }
 
   @protected

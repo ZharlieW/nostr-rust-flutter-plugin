@@ -107,16 +107,18 @@ class RelayConfig {
 /// Relay statistics (event-focused)
 class RelayStats {
   final BigInt totalEvents;
+  final BigInt connections;
 
-  const RelayStats({required this.totalEvents});
+  const RelayStats({required this.totalEvents, required this.connections});
 
   @override
-  int get hashCode => totalEvents.hashCode;
+  int get hashCode => totalEvents.hashCode ^ connections.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is RelayStats &&
           runtimeType == other.runtimeType &&
-          totalEvents == other.totalEvents;
+          totalEvents == other.totalEvents &&
+          connections == other.connections;
 }

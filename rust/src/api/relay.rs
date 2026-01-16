@@ -511,6 +511,7 @@ pub fn is_relay_running() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayStats {
     pub total_events: u64,
+    pub connections: u64,
 }
 
 /// Get relay statistics
@@ -534,7 +535,25 @@ pub async fn get_relay_stats(db_path: String) -> Result<RelayStats, String> {
     let total_events = database.count(Filter::new()).await
         .map_err(|e| format!("Failed to count events: {}", e))? as u64;
     
-    Ok(RelayStats { total_events })
+    // Get connection count from relay instance
+    let connections = {
+        let relay_guard = RELAY_INSTANCE.lock().ok();
+        if let Some(guard) = relay_guard {
+            if let Some(relay) = guard.as_ref() {
+                // Get connection count from LocalRelay
+                relay.connection_count() as u64
+            } else {
+                0u64
+            }
+        } else {
+            0u64
+        }
+    };
+    
+    Ok(RelayStats { 
+        total_events,
+        connections,
+    })
 }
 
 // FFI-compatible functions using flutter_rust_bridge
