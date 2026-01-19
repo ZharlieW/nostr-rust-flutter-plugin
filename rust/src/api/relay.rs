@@ -285,7 +285,7 @@ pub async fn start_relay(host: String, port: u16, db_path: String) -> Result<Str
     // Configure rate limit: more lenient for local relay
     let rate_limit = RateLimit {
         max_reqs: 1000,          // Max active subscriptions per connection (default: 500)
-        notes_per_minute: 600,   // Max events per minute per connection (default: 60)
+        notes_per_minute: 10000,   // Max events per minute per connection (default: 60)
     };
     
     let relay = LocalRelay::builder()
