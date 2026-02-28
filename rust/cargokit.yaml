@@ -1,0 +1,8 @@
+# home@0.5.12 requires rustc 1.88; pin toolchain so rustup uses 1.88
+cargo:
+  release:
+    toolchain: "1.88"
+  debug:
+    toolchain: "1.88"
+  profile:
+    toolchain: "1.88"
